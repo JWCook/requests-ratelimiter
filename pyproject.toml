@@ -1,0 +1,40 @@
+[tool.poetry]
+name = "requests-ratelimit"
+version = "0.1.0"
+description = "Rate-limiting for the requests library"
+authors = ["'Jordan Cook'"]
+license = "MIT"
+
+[tool.poetry.dependencies]
+python = "^3.6.2"
+pyrate-limiter = "^2.3"
+requests = "^2.20"
+
+[tool.poetry.dev-dependencies]
+black = "21.8b0"
+isort = "^5.8"
+mypy = "^0.910"
+pre-commit = "^2.12"
+pytest = "^6.2"
+pytest-cov = ">=2.11"
+pytest-xdist = ">=2.2"
+requests-mock = "^1.8"
+types-requests = ">=0.1.8"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+
+[tool.black]
+line-length = 100
+skip-string-normalization = true
+
+[tool.coverage.html]
+directory = 'test-reports'
+
+[tool.isort]
+profile = 'black'
+line_length = 100
+skip_gitignore = true
+known_first_party = ['tests']
