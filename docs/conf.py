@@ -1,24 +1,13 @@
 """Config file for Sphinx documentation"""
-# flake8: noqa: E402
-import sys
-from os.path import dirname, join
-
-# Add project path so we can import our package
-sys.path.insert(0, '..')
-from requests_ratelimiter import __version__
-
-DOCS_DIR = dirname(__file__)
-PACKAGE_DIR = join(dirname(DOCS_DIR), 'requests_ratelimiter')
 
 # General information about the project.
 copyright = '2021, Jordan Cook'
 exclude_patterns = ['_build']
 master_doc = 'index'
 needs_sphinx = '4.0'
-project = 'requests_ratelimiter'
+project = 'requests-ratelimiter'
 source_suffix = ['.rst', '.md']
 templates_path = ['_templates']
-version = release = __version__
 
 # Sphinx extensions
 extensions = [
