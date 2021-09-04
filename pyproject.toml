@@ -9,7 +9,15 @@ homepage = "https://github.com/JWCook/requests-ratelimiter"
 repository = "https://github.com/JWCook/requests-ratelimiter"
 documentation = "https://requests-ratelimiter.readthedocs.io"
 keywords = ["requests", "rate-limiting", "leaky-bucket"]
-
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Typing :: Typed",
+]
+include = [
+    {format="sdist", path="*.md"},
+    {format="sdist", path="test"},
+]
 [tool.poetry.dependencies]
 python = "^3.6.2"
 pyrate-limiter = "^2.3"
