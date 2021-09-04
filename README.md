@@ -6,7 +6,7 @@ that adds convenient integration with [requests](https://github.com/psf/requests
 
 It works as a
 [transport adapter](https://docs.python-requests.org/en/master/user/advanced/#transport-adapters)
-that runs requests with rate-limiting delays. Rates are tracked separately per host.
+that runs requests with rate-limiting delays. Rates can optionally be tracked separately per host.
 
 
 ## Installation
