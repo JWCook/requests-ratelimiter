@@ -1,5 +1,5 @@
-# Requests-Ratelimit
-**Work in progress / incomplete**
+# Requests-Ratelimiter
+**Work in progress**
 
 This package is a thin wrapper around [pyrate-limiter](https://github.com/vutran1710/PyrateLimiter)
 that adds convenient integration with [requests](https://github.com/psf/requests) sessions.
@@ -13,7 +13,7 @@ that runs requests with rate-limiting delays. Rates can optionally be tracked se
 TODO: Not yet published on PyPI
 
 ```
-pip install requests-ratelimite
+pip install requests-ratelimiter
 ```
 
 ## Usage
@@ -21,7 +21,7 @@ Example:
 ```python
 from pyrate_limiter import Duration, RequestRate
 from requests import Session
-from requests_ratelimit import LimiterAdapter
+from requests_ratelimiter import LimiterAdapter
 
 adapter = LimiterAdapter(RequestRate(10, Duration.SECOND))
 session = Session()

@@ -1,8 +1,8 @@
 [tool.poetry]
-name = "requests-ratelimit"
+name = "requests-ratelimiter"
 version = "0.1.0"
 description = "Rate-limiting for the requests library"
-authors = ["'Jordan Cook'"]
+authors = ["Jordan Cook"]
 license = "MIT"
 
 [tool.poetry.dependencies]
@@ -20,7 +20,6 @@ requests-mock = "^1.8"
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
-
 
 [tool.black]
 line-length = 100
