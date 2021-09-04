@@ -4,6 +4,11 @@ version = "0.1.0"
 description = "Rate-limiting for the requests library"
 authors = ["Jordan Cook"]
 license = "MIT"
+readme = "README.md"
+homepage = "https://github.com/JWCook/requests-ratelimiter"
+repository = "https://github.com/JWCook/requests-ratelimiter"
+keywords = ["requests", "rate-limiting", "leaky-bucket"]
+# documentation = ""  # TODO: Sphinx docs
 
 [tool.poetry.dependencies]
 python = "^3.6.2"
