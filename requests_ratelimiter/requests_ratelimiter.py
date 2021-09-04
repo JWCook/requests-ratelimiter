@@ -24,6 +24,8 @@ class LimiterMixin(MixinBase):
         rates: One or more request rates
         bucket_class: Bucket backend class; either ``MemoryQueueBucket`` (default) or ``RedisBucket``
         bucket_kwargs: Bucket backend keyword arguments
+        max_delay: The maximum allowed delay time (in seconds); anything over this will abort the
+            request
         per_host: Track request rate limits separately for each host
     """
 
@@ -32,6 +34,7 @@ class LimiterMixin(MixinBase):
         rates: Union[RequestRate, Iterable[RequestRate]],
         bucket_class: Type[AbstractBucket] = MemoryQueueBucket,
         bucket_kwargs: Dict = None,
+        max_delay: Union[int, float] = None,
         per_host: bool = False,
         **kwargs,
     ):
@@ -43,6 +46,7 @@ class LimiterMixin(MixinBase):
             rates = [rates]
 
         self.limiter = Limiter(*rates, bucket_class=bucket_class, bucket_kwargs=bucket_kwargs)
+        self.max_delay = max_delay
         self.per_host = per_host
         super().__init__(**kwargs)
 
@@ -52,7 +56,11 @@ class LimiterMixin(MixinBase):
     # Conveniently, both Session.send() and HTTPAdapter.send() have a consistent signature
     def send(self, request, **kwargs):
         """Send a request with rate-limiting"""
-        with self.limiter.ratelimit(self.bucket_name(request), delay=True):
+        with self.limiter.ratelimit(
+            self.bucket_name(request),
+            delay=True,
+            max_delay=self.max_delay,
+        ):
             return super().send(request, **kwargs)
 
 
