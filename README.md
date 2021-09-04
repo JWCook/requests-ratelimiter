@@ -101,3 +101,31 @@ for _ in range(10):
     session.get(f'https://httpbingo.org/get')
     print(response.json())
 ```
+
+## Compatibility
+There are many other useful libraries out there that add features to `requests`, most commonly by
+extending or modifying
+[requests.Session](https://docs.python-requests.org/en/master/api/#requests.Session).
+
+To use `requests-ratelimiter` with one of these libraries, you have at least two options:
+1. Mount a `LimiterAdapter` on an instance of the library's `Session` class
+2. Use `LimiterMixin` to create a custom `Session` class with features from both libraries
+
+### Requests-Cache
+For example, to combine with [requests-cache](https://github.com/reclosedev/requests-cache), which
+also includes a separate mixin class:
+```python
+from requests_cache import CacheMixin
+from requests_ratelimiter import LimiterMixin
+
+
+class CachedLimiterSession(LimiterMixin, CacheMixin, Session):
+    """Session class with caching and rate-limiting behavior. Accepts arguments for both
+    LimiterSession and CachedSession.
+    """
+
+
+session = CachedLimiterSession(RequestRate(5, Duration.SECOND), backend='redis')
+```
+
+This example has an extra benefit: cache hits won't count against your rate limit!
