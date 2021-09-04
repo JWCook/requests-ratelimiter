@@ -37,7 +37,7 @@ session = LimiterSession(RequestRate(5, Duration.SECOND))
 
 # Make rate-limited requests that stay within 5 requests per second
 for _ in range(10):
-    response = session.get(f'https://httpbin.org/get')
+    response = session.get('https://httpbin.org/get')
     print(response.json())
 ```
 
