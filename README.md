@@ -6,10 +6,10 @@ status](https://github.com/JWCook/requests-ratelimiter/workflows/Build/badge.svg
 [![PyPI - Python Versions](https://img.shields.io/pypi/pyversions/requests-ratelimiter)](https://pypi.org/project/requests-ratelimiter)
 [![PyPI - Format](https://img.shields.io/pypi/format/requests-ratelimiter?color=blue)](https://pypi.org/project/requests-ratelimiter)
 
-**Work in progress**
-
 This package is a thin wrapper around [pyrate-limiter](https://github.com/vutran1710/PyrateLimiter)
 that adds convenient integration with the [requests](https://github.com/psf/requests) library.
+
+Project documentation can be found at [requests-ratelimiter.readthedocs.io](https://requests-ratelimiter.readthedocs.io).
 
 
 ## Features
