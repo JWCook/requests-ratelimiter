@@ -1,15 +1,20 @@
-from typing import Type
+from typing import TYPE_CHECKING, Type
 from urllib.parse import urlparse
 from uuid import uuid4
 
 from pyrate_limiter import Limiter
 from pyrate_limiter.bucket import AbstractBucket, MemoryQueueBucket
 from pyrate_limiter.request_rate import RequestRate
-from requests.adapters import HTTPAdapter
+from requests import Session
+
+if TYPE_CHECKING:
+    MixinBase = Session
+else:
+    MixinBase = object
 
 
-class LimiterAdapter(HTTPAdapter):
-    """Transport adapter that adds rate-limiting"""
+class LimiterMixin(MixinBase):
+    """Mixin class that adds rate-limiting behavior to requests"""
 
     def __init__(
         self,
@@ -31,3 +36,7 @@ class LimiterAdapter(HTTPAdapter):
         """Send a request with rate-limiting"""
         with self.limiter.ratelimit(self.bucket_name(request), delay=True):
             return super().send(request, **kwargs)
+
+
+class LimiterSession(LimiterMixin, Session):
+    """Session that adds rate-limiting"""
