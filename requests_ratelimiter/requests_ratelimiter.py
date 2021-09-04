@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Dict, Type
+from typing import TYPE_CHECKING, Dict, Iterable, Type, Union
 from urllib.parse import urlparse
 from uuid import uuid4
 
@@ -29,7 +29,7 @@ class LimiterMixin(MixinBase):
 
     def __init__(
         self,
-        *rates: RequestRate,
+        rates: Union[RequestRate, Iterable[RequestRate]],
         bucket_class: Type[AbstractBucket] = MemoryQueueBucket,
         bucket_kwargs: Dict = None,
         per_host: bool = False,
@@ -38,6 +38,9 @@ class LimiterMixin(MixinBase):
         self._default_bucket = str(uuid4())
         bucket_kwargs = bucket_kwargs or {}
         bucket_kwargs.setdefault('bucket_name', self._default_bucket)
+
+        if not isinstance(rates, Iterable):
+            rates = [rates]
 
         self.limiter = Limiter(*rates, bucket_class=bucket_class, bucket_kwargs=bucket_kwargs)
         self.per_host = per_host

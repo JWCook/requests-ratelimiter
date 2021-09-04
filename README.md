@@ -126,7 +126,7 @@ from requests_cache import CacheMixin, RedisCache
 from requests_ratelimiter import LimiterMixin
 
 
-class CachedLimiterSession(LimiterMixin, CacheMixin, Session):
+class CachedLimiterSession(CacheMixin, LimiterMixin, Session):
     """Session class with caching and rate-limiting behavior. Accepts arguments for both
     LimiterSession and CachedSession.
     """
@@ -134,7 +134,7 @@ class CachedLimiterSession(LimiterMixin, CacheMixin, Session):
 
 # Optionally use Redis as both the bucket backend and the cache backend
 session = CachedLimiterSession(
-    RequestRate(5, Duration.SECOND),
+    rates=RequestRate(5, Duration.SECOND),
     bucket_class=RedisBucket,
     backend=RedisCache(),
 )
