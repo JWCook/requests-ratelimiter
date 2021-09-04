@@ -51,8 +51,13 @@ class LimiterMixin(MixinBase):
 
 
 class LimiterSession(LimiterMixin, Session):  # type: ignore  # false positive due to MixinBase
-    """Session that adds rate-limiting"""
+    """`Session <https://docs.python-requests.org/en/master/user/advanced/#session-objects>`_
+    that adds rate-limiting behavior to requests.
+    """
 
 
 class LimiterAdapter(LimiterMixin, HTTPAdapter):
-    """Transport adapter that adds rate-limiting"""
+    """`Transport adapter
+    <https://docs.python-requests.org/en/master/user/advanced/#transport-adapters>`_
+    that adds rate-limiting behavior to requests.
+    """
