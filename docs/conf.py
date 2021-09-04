@@ -41,11 +41,14 @@ autodoc_typehints = 'none'
 
 # HTML general settings
 html_show_sphinx = False
+html_static_path = ['_static']
 pygments_style = 'friendly'
 pygments_dark_style = 'material'
 
 # HTML theme settings
 html_theme = 'furo'
 html_theme_options = {
+    'light_logo': 'requests-ratelimiter.png',
+    'dark_logo': 'requests-ratelimiter-white.png',
     'sidebar_hide_name': True,
 }
