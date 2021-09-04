@@ -35,9 +35,12 @@ class LimiterMixin(MixinBase):
         per_host: bool = False,
         **kwargs,
     ):
+        self._default_bucket = str(uuid4())
+        bucket_kwargs = bucket_kwargs or {}
+        bucket_kwargs.setdefault('bucket_name', self._default_bucket)
+
         self.limiter = Limiter(*rates, bucket_class=bucket_class, bucket_kwargs=bucket_kwargs)
         self.per_host = per_host
-        self._default_bucket = str(uuid4())
         super().__init__(**kwargs)
 
     def bucket_name(self, request):
