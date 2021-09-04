@@ -1,7 +1,13 @@
 API Reference
 =============
+.. autoclass:: requests_ratelimiter.requests_ratelimiter.LimiterMixin
 
-.. automodule:: requests_ratelimiter.requests_ratelimiter
+.. autoclass:: requests_ratelimiter.requests_ratelimiter.LimiterSession
    :members:
-   :undoc-members:
    :show-inheritance:
+   :inherited-members:
+
+.. autoclass:: requests_ratelimiter.requests_ratelimiter.LimiterAdapter
+   :members:
+   :show-inheritance:
+   :inherited-members:

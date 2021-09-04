@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Type
+from typing import TYPE_CHECKING, Dict, Type
 from urllib.parse import urlparse
 from uuid import uuid4
 
@@ -15,13 +15,23 @@ else:
 
 
 class LimiterMixin(MixinBase):
-    """Mixin class that adds rate-limiting behavior to requests"""
+    """Mixin class that adds rate-limiting behavior to requests.
+
+    The following parameters also apply to :py:class:`.LimiterSession` and
+    :py:class:`.LimiterAdapter`.
+
+    Args:
+        rates: One or more request rates
+        bucket_class: Bucket backend class; either ``MemoryQueueBucket`` (default) or ``RedisBucket``
+        bucket_kwargs: Bucket backend keyword arguments
+        per_host: Track request rate limits separately for each host
+    """
 
     def __init__(
         self,
         *rates: RequestRate,
         bucket_class: Type[AbstractBucket] = MemoryQueueBucket,
-        bucket_kwargs=None,
+        bucket_kwargs: Dict = None,
         per_host: bool = False,
         **kwargs,
     ):
