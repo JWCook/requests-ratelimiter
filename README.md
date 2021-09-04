@@ -21,8 +21,6 @@ that adds convenient integration with the [requests](https://github.com/psf/requ
   manually applied to different hosts
 
 ## Installation
-TODO: Not yet published on PyPI
-
 ```
 pip install requests-ratelimiter
 ```
