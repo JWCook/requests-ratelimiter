@@ -33,12 +33,11 @@ pip install requests-ratelimiter
 Example with `LimiterSession`:
 
 ```python
-from pyrate_limiter import Duration, RequestRate
 from requests import Session
 from requests_ratelimiter import LimiterSession
 
 # Apply a rate-limit (5 requests per second) to all requests
-session = LimiterSession(RequestRate(5, Duration.SECOND))
+session = LimiterSession(per_second=5)
 
 # Make rate-limited requests that stay within 5 requests per second
 for _ in range(10):
@@ -50,14 +49,13 @@ for _ in range(10):
 Example with `LimiterAdapter`:
 
 ```python
-from pyrate_limiter import Duration, RequestRate
 from requests import Session
 from requests_ratelimiter import LimiterAdapter
 
 session = Session()
 
 # Apply a rate-limit (5 requests per second) to all requests
-adapter = LimiterAdapter(RequestRate(5, Duration.SECOND))
+adapter = LimiterAdapter(per_second=5)
 session.mount('http://', adapter)
 session.mount('https://', adapter)
 
@@ -71,10 +69,7 @@ for user_id in range(100):
 With `LimiterAdapter`, you can apply different rate limits to different hosts or URLs:
 ```python
 # Apply different rate limits (2/second and 100/minute) to a specific host
-adapter_2 = LimiterAdapter(
-    RequestRate(2, Duration.SECOND),
-    RequestRate(100, Duration.MINUTE),
-)
+adapter_2 = LimiterAdapter(per_second=2, per_minute=100)
 session.mount('https://api.some_site.com', adapter_2)
 ```
 
@@ -97,7 +92,7 @@ for each host; in other words, requests sent to one host will not count against 
 any other hosts. This can be enabled with the `per_host` option:
 
 ```python
-session = LimiterSession(RequestRate(5, Duration.SECOND), per_host=True)
+session = LimiterSession(per_second=5, per_host=True)
 
 # Make requests for two different hosts
 for _ in range(10):
@@ -120,7 +115,7 @@ To use `requests-ratelimiter` with one of these libraries, you have at least two
 For example, to combine with [requests-cache](https://github.com/reclosedev/requests-cache), which
 also includes a separate mixin class:
 ```python
-from pyrate_limiter import RedisBucket, RequestRate, Duration
+from pyrate_limiter import RedisBucket
 from requests import Session
 from requests_cache import CacheMixin, RedisCache
 from requests_ratelimiter import LimiterMixin
@@ -134,7 +129,7 @@ class CachedLimiterSession(CacheMixin, LimiterMixin, Session):
 
 # Optionally use Redis as both the bucket backend and the cache backend
 session = CachedLimiterSession(
-    rates=RequestRate(5, Duration.SECOND),
+    per_second=5,
     bucket_class=RedisBucket,
     backend=RedisCache(),
 )
