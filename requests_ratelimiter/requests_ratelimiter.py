@@ -1,4 +1,5 @@
-from typing import TYPE_CHECKING, Dict, Type, Union
+from inspect import signature
+from typing import TYPE_CHECKING, Callable, Dict, Type, Union
 from urllib.parse import urlparse
 from uuid import uuid4
 
@@ -8,7 +9,7 @@ from requests import Session
 from requests.adapters import HTTPAdapter
 
 if TYPE_CHECKING:
-    MixinBase = HTTPAdapter
+    MixinBase = Session
 else:
     MixinBase = object
 
@@ -76,7 +77,10 @@ class LimiterMixin(MixinBase):
         )
         self.max_delay = max_delay
         self.per_host = per_host
-        super().__init__(**kwargs)
+
+        # If the superclass is an adapter or custom Session, pass along any valid keyword arguments
+        session_kwargs = get_valid_kwargs(super().__init__, kwargs)
+        super().__init__(**session_kwargs)  # type: ignore  # Base Session doesn't take any kwargs
 
     def bucket_name(self, request):
         return urlparse(request.url).netloc if self.per_host else self._default_bucket
@@ -92,14 +96,20 @@ class LimiterMixin(MixinBase):
             return super().send(request, **kwargs)
 
 
-class LimiterSession(LimiterMixin, Session):  # type: ignore  # false positive due to MixinBase
+class LimiterSession(LimiterMixin, Session):
     """`Session <https://docs.python-requests.org/en/master/user/advanced/#session-objects>`_
     that adds rate-limiting behavior to requests.
     """
 
 
-class LimiterAdapter(LimiterMixin, HTTPAdapter):
+class LimiterAdapter(LimiterMixin, HTTPAdapter):  # type: ignore  # False positive due to MixinBase
     """`Transport adapter
     <https://docs.python-requests.org/en/master/user/advanced/#transport-adapters>`_
     that adds rate-limiting behavior to requests.
     """
+
+
+def get_valid_kwargs(func: Callable, kwargs: Dict) -> Dict:
+    """Get the subset of non-None ``kwargs`` that are valid params for ``func``"""
+    sig_params = list(signature(func).parameters)
+    return {k: v for k, v in kwargs.items() if k in sig_params and v is not None}
