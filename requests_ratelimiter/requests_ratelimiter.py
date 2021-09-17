@@ -1,5 +1,5 @@
 from inspect import signature
-from typing import TYPE_CHECKING, Callable, Dict, Type, Union
+from typing import Callable, Dict, Type, Union
 from urllib.parse import urlparse
 from uuid import uuid4
 
@@ -8,13 +8,8 @@ from pyrate_limiter.bucket import AbstractBucket, MemoryQueueBucket
 from requests import Session
 from requests.adapters import HTTPAdapter
 
-if TYPE_CHECKING:
-    MixinBase = Session
-else:
-    MixinBase = object
 
-
-class LimiterMixin(MixinBase):
+class LimiterMixin:
     """Mixin class that adds rate-limiting behavior to requests.
 
     The following parameters also apply to :py:class:`.LimiterSession` and
@@ -102,7 +97,7 @@ class LimiterSession(LimiterMixin, Session):
     """
 
 
-class LimiterAdapter(LimiterMixin, HTTPAdapter):  # type: ignore  # False positive due to MixinBase
+class LimiterAdapter(LimiterMixin, HTTPAdapter):  # type: ignore  # False positive: send(**kwargs)
     """`Transport adapter
     <https://docs.python-requests.org/en/master/user/advanced/#transport-adapters>`_
     that adds rate-limiting behavior to requests.
