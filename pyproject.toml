@@ -24,7 +24,7 @@ pyrate-limiter = "^2.3"
 requests = "^2.20"
 
 # Documentation dependencies needed for Readthedocs builds
-furo = {version = "2022.2.23", optional = true}
+furo = {version = "2022.3.4", optional = true}
 myst-parser = {version = ">=0.15.1,<0.17.0", optional = true}
 sphinx = { version = "^4.0.2", optional = true }
 sphinx-autodoc-typehints = { version = "^1.11", optional = true }
