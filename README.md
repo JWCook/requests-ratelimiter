@@ -14,8 +14,7 @@ Project documentation can be found at [requests-ratelimiter.readthedocs.io](http
 
 
 ## Features
-* `pyrate-limiter` implements the leaky bucket algorithm, supports multiple rate limits, and an
-  optional Redis backend
+* `pyrate-limiter` implements the leaky bucket algorithm, supports multiple rate limits, and optional persistence with SQLite and Redis backends
 * `requests-ratelimiter` can be used as a
   [transport adapter](https://docs.python-requests.org/en/master/user/advanced/#transport-adapters),
   [session](https://docs.python-requests.org/en/master/user/advanced/#session-objects),
@@ -107,9 +106,9 @@ for _ in range(10):
 There are many other useful libraries out there that add features to `requests`, most commonly by
 extending or modifying
 [requests.Session](https://docs.python-requests.org/en/master/api/#requests.Session) or
-[requests.HTTPAdapter](https://2.python-requests.org/en/master/api/#requests.adapters.HTTPAdapter).
+[requests.HTTPAdapter](https://docs.python-requests.org/en/master/api/#requests.adapters.HTTPAdapter).
 
-To use `requests-ratelimiter` with one of these libraries, you have at least two options:
+To use `requests-ratelimiter` with one of these libraries, you have a few different options:
 1. If the library provides a custom `Session` class, mount a `LimiterAdapter` on it
 2. Or use `LimiterMixin` to create a custom `Session` class with features from both libraries
 3. If the library provides a custom `Adapter` class, use `LimiterMixin` to create a custom `Adapter`
