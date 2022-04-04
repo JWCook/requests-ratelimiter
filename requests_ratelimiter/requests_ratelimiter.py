@@ -1,15 +1,22 @@
 from inspect import signature
-from typing import Callable, Dict, Type, Union
+from logging import getLogger
+from typing import TYPE_CHECKING, Callable, Dict, Type, Union
 from urllib.parse import urlparse
 from uuid import uuid4
 
 from pyrate_limiter import Duration, Limiter, RequestRate
-from pyrate_limiter.bucket import AbstractBucket, MemoryQueueBucket
-from requests import Session
+from pyrate_limiter.bucket import AbstractBucket, MemoryListBucket
+from requests import PreparedRequest, Response, Session
 from requests.adapters import HTTPAdapter
 
+if TYPE_CHECKING:
+    MIXIN_BASE = Session
+else:
+    MIXIN_BASE = object
+logger = getLogger(__name__)
 
-class LimiterMixin:
+
+class LimiterMixin(MIXIN_BASE):
     """Mixin class that adds rate-limiting behavior to requests.
 
     The following parameters also apply to :py:class:`.LimiterSession` and
@@ -43,7 +50,7 @@ class LimiterMixin:
         per_day: float = 0,
         per_month: float = 0,
         burst: float = 1,
-        bucket_class: Type[AbstractBucket] = MemoryQueueBucket,
+        bucket_class: Type[AbstractBucket] = MemoryListBucket,
         bucket_kwargs: Dict = None,
         limiter: Limiter = None,
         max_delay: Union[int, float] = None,
@@ -77,18 +84,33 @@ class LimiterMixin:
         session_kwargs = get_valid_kwargs(super().__init__, kwargs)
         super().__init__(**session_kwargs)  # type: ignore  # Base Session doesn't take any kwargs
 
-    def bucket_name(self, request):
-        return urlparse(request.url).netloc if self.per_host else self._default_bucket
-
-    # Conveniently, both Session.send() and HTTPAdapter.send() have a consistent signature
-    def send(self, request, **kwargs):
+    # Conveniently, both Session.send() and HTTPAdapter.send() have a mostly consistent signature
+    def send(self, request: PreparedRequest, **kwargs) -> Response:
         """Send a request with rate-limiting"""
         with self.limiter.ratelimit(
-            self.bucket_name(request),
+            self._bucket_name(request),
             delay=True,
             max_delay=self.max_delay,
         ):
-            return super().send(request, **kwargs)
+            response = super().send(request, **kwargs)
+            if response.status_code == 429:
+                self._fill_bucket(request)
+            return response
+
+    def _bucket_name(self, request):
+        """Get a bucket name for the given request"""
+        return urlparse(request.url).netloc if self.per_host else self._default_bucket
+
+    def _fill_bucket(self, request: PreparedRequest):
+        """Fill the bucket for the given request, indicating no more requests are avaliable"""
+        logger.info(f'Rate limit exceeded for {request.url}; filling limiter bucket')
+        bucket = self.limiter.bucket_group[self._bucket_name(request)]
+        now = self.limiter.time_function()
+
+        # Bucket.put() will return 1 until full
+        while True:
+            if bucket.put(now) != 1:
+                break
 
 
 class LimiterSession(LimiterMixin, Session):
@@ -97,7 +119,7 @@ class LimiterSession(LimiterMixin, Session):
     """
 
 
-class LimiterAdapter(LimiterMixin, HTTPAdapter):  # type: ignore  # False positive: send(**kwargs)
+class LimiterAdapter(LimiterMixin, HTTPAdapter):  # type: ignore  # send signature accepts **kwargs
     """`Transport adapter
     <https://docs.python-requests.org/en/master/user/advanced/#transport-adapters>`_
     that adds rate-limiting behavior to requests.
