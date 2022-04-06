@@ -34,13 +34,14 @@ class LimiterMixin(MIXIN_BASE):
         per_day: Max requests per day
         per_month: Max requests per month
         burst: Max number of consecutive requests allowed before applying per-second rate-limiting
-        bucket_class: Bucket backend class; may be one of ``MemoryQueueBucket`` (default),
-            ``SQLiteBucket``, or ``RedisBucket``
+        bucket_class: Bucket backend class; may be one of :py:class:`.MemoryQueueBucket` (default),
+            :py:class:`.SQLiteBucket`, or :py:class:`.RedisBucket`
         bucket_kwargs: Bucket backend keyword arguments
         limiter: An existing Limiter object to use instead of the above params
         max_delay: The maximum allowed delay time (in seconds); anything over this will abort the
-            request
+            request and raise a :py:exc:`.BucketFullException`
         per_host: Track request rate limits separately for each host
+        limit_statuses: Alternative HTTP status codes that indicate a rate limit was exceeded
     """
 
     def __init__(
@@ -86,7 +87,11 @@ class LimiterMixin(MIXIN_BASE):
 
     # Conveniently, both Session.send() and HTTPAdapter.send() have a mostly consistent signature
     def send(self, request: PreparedRequest, **kwargs) -> Response:
-        """Send a request with rate-limiting"""
+        """Send a request with rate-limiting.
+
+        Raises:
+            :py:exc:`.BucketFullException` if this request would result in a delay longer than ``max_delay``
+        """
         with self.limiter.ratelimit(
             self._bucket_name(request),
             delay=True,
@@ -107,7 +112,7 @@ class LimiterMixin(MIXIN_BASE):
         we've gotten out of sync.
 
         If the server tracks multiple limits, there's no way to know which specific limit was
-        exceeded. So will use the smallest rate will be used.
+        exceeded, so the smallest rate will be used.
 
         For example, if the server allows 60 requests per minute, and we've tracked only 40 requests
         but received a 429 response, 20 additional "filler" requests will be added to the bucket to
