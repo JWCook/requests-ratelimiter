@@ -103,6 +103,29 @@ for _ in range(10):
     print(response.json())
 ```
 
+### Server-Side Rate Limit Behavior
+Sometimes, server-side rate limiting may not behave exactly as documented (or may not be documented
+at all). Or you might encounter other scenarios where your client-side limit gets out of sync with
+the server-side limit. In most cases, a server will send a `429: Too Many Requests` response for an
+exceeded rate limit.
+
+`requests-ratelimiter` will handle this by setting the local limit tracker to a "limit exceeded"
+state. If a server sends a different status code to indicate an exceeded limit, you can set this
+via `limit_statuses`:
+```python
+session = LimiterSession(per_second=5, limit_statuses=[429, 500])
+```
+
+Or if you would prefer to disable this behavior and handle it yourself:
+```python
+session = LimiterSession(per_second=5, limit_statuses=[])
+```
+
+### Backends
+By default, rate limits are tracked in memory and are not persistent. You can optionally use either
+SQLite or Redis to persist rate limits across threads, processes, and/or application restarts. See
+[pyrate-limiter docs](https://github.com/vutran1710/PyrateLimiter#bucket-backends) for more details.
+
 ## Compatibility
 There are many other useful libraries out there that add features to `requests`, most commonly by
 extending or modifying
