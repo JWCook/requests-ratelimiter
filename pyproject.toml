@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "requests-ratelimiter"
-version = "0.2.1"
+version = "0.3.0"
 description = "Rate-limiting for the requests library"
 authors = ["Jordan Cook"]
 license = "MIT"
@@ -20,15 +20,15 @@ include = [
 ]
 [tool.poetry.dependencies]
 python = "^3.6.2"
-pyrate-limiter = "^2.3"
+pyrate-limiter = ">=2.6.3"
 requests = "^2.20"
 
 # Documentation dependencies needed for Readthedocs builds
 furo = {version = "2022.3.4", optional = true}
-myst-parser = {version = ">=0.15.1,<0.17.0", optional = true}
-sphinx = { version = "^4.0.2", optional = true }
-sphinx-autodoc-typehints = { version = "^1.11", optional = true }
-sphinx-copybutton = { version = ">=0.3,<0.5", optional = true }
+myst-parser = {version = ">=0.17", optional = true, python=">=3.7"}
+sphinx = { version = "^4.3.0", optional = true }
+sphinx-autodoc-typehints = { version = "^1.17", optional = true, python=">=3.7" }
+sphinx-copybutton = { version = ">=0.5", optional = true }
 
 
 [tool.poetry.extras]
@@ -55,8 +55,15 @@ build-backend = "poetry.core.masonry.api"
 line-length = 100
 skip-string-normalization = true
 
+[tool.coverage.run]
+branch = true
+source = ['requests_ratelimiter']
+
 [tool.coverage.html]
 directory = 'test-reports'
+
+[tool.coverage.xml]
+output = 'test-reports/coverage.xml'
 
 [tool.isort]
 profile = 'black'

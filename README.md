@@ -1,6 +1,7 @@
 # Requests-Ratelimiter
 [![Build
 status](https://github.com/JWCook/requests-ratelimiter/workflows/Build/badge.svg)](https://github.com/JWCook/requests-ratelimiter/actions)
+[![Codecov](https://codecov.io/gh/JWCook/requests-ratelimiter/branch/main/graph/badge.svg)](https://codecov.io/gh/JWCook/requests-ratelimiter)
 [![Documentation Status](https://img.shields.io/readthedocs/requests-ratelimiter/stable?label=docs)](https://requests-ratelimiter.readthedocs.io)
 [![PyPI](https://img.shields.io/pypi/v/requests-ratelimiter?color=blue)](https://pypi.org/project/requests-ratelimiter)
 [![Conda](https://img.shields.io/conda/vn/conda-forge/requests-ratelimiter?color=blue)](https://anaconda.org/conda-forge/requests-ratelimiter)
@@ -14,8 +15,7 @@ Project documentation can be found at [requests-ratelimiter.readthedocs.io](http
 
 
 ## Features
-* `pyrate-limiter` implements the leaky bucket algorithm, supports multiple rate limits, and an
-  optional Redis backend
+* `pyrate-limiter` implements the leaky bucket algorithm, supports multiple rate limits, and optional persistence with SQLite and Redis backends
 * `requests-ratelimiter` can be used as a
   [transport adapter](https://docs.python-requests.org/en/master/user/advanced/#transport-adapters),
   [session](https://docs.python-requests.org/en/master/user/advanced/#session-objects),
@@ -103,13 +103,36 @@ for _ in range(10):
     print(response.json())
 ```
 
+### Server-Side Rate Limit Behavior
+Sometimes, server-side rate limiting may not behave exactly as documented (or may not be documented
+at all). Or you might encounter other scenarios where your client-side limit gets out of sync with
+the server-side limit. In most cases, a server will send a `429: Too Many Requests` response for an
+exceeded rate limit.
+
+`requests-ratelimiter` will handle this by setting the local limit tracker to a "limit exceeded"
+state. If a server sends a different status code to indicate an exceeded limit, you can set this
+via `limit_statuses`:
+```python
+session = LimiterSession(per_second=5, limit_statuses=[429, 500])
+```
+
+Or if you would prefer to disable this behavior and handle it yourself:
+```python
+session = LimiterSession(per_second=5, limit_statuses=[])
+```
+
+### Backends
+By default, rate limits are tracked in memory and are not persistent. You can optionally use either
+SQLite or Redis to persist rate limits across threads, processes, and/or application restarts. See
+[pyrate-limiter docs](https://github.com/vutran1710/PyrateLimiter#bucket-backends) for more details.
+
 ## Compatibility
 There are many other useful libraries out there that add features to `requests`, most commonly by
 extending or modifying
 [requests.Session](https://docs.python-requests.org/en/master/api/#requests.Session) or
-[requests.HTTPAdapter](https://2.python-requests.org/en/master/api/#requests.adapters.HTTPAdapter).
+[requests.HTTPAdapter](https://docs.python-requests.org/en/master/api/#requests.adapters.HTTPAdapter).
 
-To use `requests-ratelimiter` with one of these libraries, you have at least two options:
+To use `requests-ratelimiter` with one of these libraries, you have a few different options:
 1. If the library provides a custom `Session` class, mount a `LimiterAdapter` on it
 2. Or use `LimiterMixin` to create a custom `Session` class with features from both libraries
 3. If the library provides a custom `Adapter` class, use `LimiterMixin` to create a custom `Adapter`
