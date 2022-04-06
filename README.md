@@ -8,20 +8,24 @@ status](https://github.com/JWCook/requests-ratelimiter/workflows/Build/badge.svg
 [![PyPI - Python Versions](https://img.shields.io/pypi/pyversions/requests-ratelimiter)](https://pypi.org/project/requests-ratelimiter)
 [![PyPI - Format](https://img.shields.io/pypi/format/requests-ratelimiter?color=blue)](https://pypi.org/project/requests-ratelimiter)
 
-This package is a thin wrapper around [pyrate-limiter](https://github.com/vutran1710/PyrateLimiter)
+This package is a simple wrapper around [pyrate-limiter](https://github.com/vutran1710/PyrateLimiter)
 that adds convenient integration with the [requests](https://github.com/psf/requests) library.
 
-Project documentation can be found at [requests-ratelimiter.readthedocs.io](https://requests-ratelimiter.readthedocs.io).
+Full project documentation can be found at [requests-ratelimiter.readthedocs.io](https://requests-ratelimiter.readthedocs.io).
 
 
 ## Features
-* `pyrate-limiter` implements the leaky bucket algorithm, supports multiple rate limits, and optional persistence with SQLite and Redis backends
-* `requests-ratelimiter` can be used as a
+* `pyrate-limiter` is a general-purpose rate limiting library that implements the leaky bucket
+  algorithm, supports multiple rate limits, and has optional persistence with SQLite and Redis
+  backends
+* `requests-ratelimiter` adds some extra conveniences specific to sending HTTP requests with the
+  `requests` library
+* It can be used as a
   [transport adapter](https://docs.python-requests.org/en/master/user/advanced/#transport-adapters),
   [session](https://docs.python-requests.org/en/master/user/advanced/#session-objects),
-  or session mixin for compatibility with other `requests`-based libraries.
-* Rate limits can be automatically tracked separately per host, and different rate limits can be
-  manually applied to different hosts
+  or session mixin for compatibility with other `requests`-based libraries
+* Rate limits are tracked separately per host
+* Different rate limits can optionally be applied to different hosts
 
 ## Installation
 ```
@@ -66,7 +70,29 @@ for user_id in range(100):
     print(response.json())
 ```
 
-### Per-Host Rate Limits
+### Per-Host Rate Limit Tracking
+With either `LimiterSession` or `LimiterAdapter`, rate limits are tracked separately
+for each host. In other words, requests sent to one host will not count against the rate limit for
+any other hosts:
+
+```python
+session = LimiterSession(per_second=5)
+
+# Make requests for two different hosts
+for _ in range(10):
+    response = session.get(f'https://httpbin.org/get')
+    print(response.json())
+    session.get(f'https://httpbingo.org/get')
+    print(response.json())
+```
+
+If you have a case where multiple hosts share the same rate limit, you can disable this behavior
+with the `per_host` option:
+```python
+session = LimiterSession(per_second=5, per_host=False)
+```
+
+### Per-Host Rate Limit Definitions
 With `LimiterAdapter`, you can apply different rate limits to different hosts or URLs:
 ```python
 # Apply different rate limits (2/second and 100/minute) to a specific host
@@ -87,31 +113,18 @@ session.get('https://api.some_site.com/v1/')
 session.get('https://api.some_site.com/v1/users/1234')
 ```
 
-### Per-Host Rate Limit Tracking
-With either `LimiterSession` or `LimiterAdapter`, you can automatically track rate limits separately
-for each host; in other words, requests sent to one host will not count against the rate limit for
-any other hosts. This can be enabled with the `per_host` option:
-
-```python
-session = LimiterSession(per_second=5, per_host=True)
-
-# Make requests for two different hosts
-for _ in range(10):
-    response = session.get(f'https://httpbin.org/get')
-    print(response.json())
-    session.get(f'https://httpbingo.org/get')
-    print(response.json())
-```
-
 ### Server-Side Rate Limit Behavior
 Sometimes, server-side rate limiting may not behave exactly as documented (or may not be documented
 at all). Or you might encounter other scenarios where your client-side limit gets out of sync with
 the server-side limit. In most cases, a server will send a `429: Too Many Requests` response for an
 exceeded rate limit.
 
-`requests-ratelimiter` will handle this by setting the local limit tracker to a "limit exceeded"
-state. If a server sends a different status code to indicate an exceeded limit, you can set this
-via `limit_statuses`:
+When this happens, `requests-ratelimiter` will attempt to catch up to the server-side limit by
+adding an extra delay before the next request. This will use the smallest rate limit interval you've
+defined. For example, if you have a per-minute and per-hour limit, up to 1 minute of delay time will
+be added before the next request.
+
+If a server sends a different status code to indicate an exceeded limit, you can set this via `limit_statuses`:
 ```python
 session = LimiterSession(per_second=5, limit_statuses=[429, 500])
 ```
@@ -142,10 +155,9 @@ To use `requests-ratelimiter` with one of these libraries, you have a few differ
 For example, to combine with [requests-cache](https://github.com/reclosedev/requests-cache), which
 also includes a separate mixin class:
 ```python
-from pyrate_limiter import RedisBucket
 from requests import Session
 from requests_cache import CacheMixin, RedisCache
-from requests_ratelimiter import LimiterMixin
+from requests_ratelimiter import LimiterMixin, RedisBucket
 
 
 class CachedLimiterSession(CacheMixin, LimiterMixin, Session):
