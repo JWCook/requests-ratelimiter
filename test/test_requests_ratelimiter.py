@@ -5,6 +5,7 @@ additional behavior specific to requests-ratelimiter.
 from test.conftest import (
     MOCKED_URL,
     MOCKED_URL_429,
+    MOCKED_URL_500,
     MOCKED_URL_ALT_HOST,
     get_mock_session,
     mount_mock_adapter,
@@ -104,4 +105,26 @@ def test_429__per_host(mock_sleep):
 
     # A 429 from one host should not affect requests for a different host
     session.get(MOCKED_URL_ALT_HOST)
+    assert mock_sleep.called is False
+
+
+@patch_sleep
+def test_custom_limit_status(mock_sleep):
+    """Optionally handle additional status codes that indicate an exceeded rate limit"""
+    session = get_mock_session(per_second=5, limit_statuses=[500])
+
+    session.get(MOCKED_URL_500)
+    assert mock_sleep.called is False
+
+    session.get(MOCKED_URL_500)
+    assert mock_sleep.called is True
+
+
+@patch_sleep
+def test_limit_status_disabled(mock_sleep):
+    """Optionally handle additional status codes that indicate an exceeded rate limit"""
+    session = get_mock_session(per_second=5, limit_statuses=[])
+
+    session.get(MOCKED_URL_429)
+    session.get(MOCKED_URL_429)
     assert mock_sleep.called is False

@@ -1,6 +1,6 @@
 from inspect import signature
 from logging import getLogger
-from typing import TYPE_CHECKING, Callable, Dict, Type, Union
+from typing import TYPE_CHECKING, Callable, Dict, Iterable, Type, Union
 from urllib.parse import urlparse
 from uuid import uuid4
 
@@ -55,6 +55,7 @@ class LimiterMixin(MIXIN_BASE):
         limiter: Limiter = None,
         max_delay: Union[int, float] = None,
         per_host: bool = False,
+        limit_statuses: Iterable[int] = (429,),
         **kwargs,
     ):
         self._default_bucket = str(uuid4())
@@ -77,6 +78,7 @@ class LimiterMixin(MIXIN_BASE):
         self.limiter = limiter or Limiter(
             *rates, bucket_class=bucket_class, bucket_kwargs=bucket_kwargs
         )
+        self.limit_statuses = limit_statuses
         self.max_delay = max_delay
         self.per_host = per_host
 
@@ -93,7 +95,7 @@ class LimiterMixin(MIXIN_BASE):
             max_delay=self.max_delay,
         ):
             response = super().send(request, **kwargs)
-            if response.status_code == 429:
+            if response.status_code in self.limit_statuses:
                 self._fill_bucket(request)
             return response
 

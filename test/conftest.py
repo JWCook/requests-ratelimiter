@@ -10,6 +10,7 @@ MOCK_PROTOCOLS = ['mock://', 'http+mock://', 'https+mock://']
 MOCKED_URL = 'http+mock://requests-ratelimiter.com/text'
 MOCKED_URL_ALT_HOST = 'http+mock://requests-ratelimiter-2.com/text'
 MOCKED_URL_429 = 'http+mock://requests-ratelimiter.com/429'
+MOCKED_URL_500 = 'http+mock://requests-ratelimiter.com/500'
 
 # Configure logging to show log output when tests fail (or with pytest -s)
 basicConfig(level='INFO')
@@ -49,4 +50,5 @@ def get_mock_adapter() -> Adapter:
         status_code=200,
     )
     adapter.register_uri(ANY_METHOD, MOCKED_URL_429, status_code=429)
+    adapter.register_uri(ANY_METHOD, MOCKED_URL_500, status_code=500)
     return adapter
