@@ -155,10 +155,9 @@ To use `requests-ratelimiter` with one of these libraries, you have a few differ
 For example, to combine with [requests-cache](https://github.com/reclosedev/requests-cache), which
 also includes a separate mixin class:
 ```python
-from pyrate_limiter import RedisBucket
 from requests import Session
 from requests_cache import CacheMixin, RedisCache
-from requests_ratelimiter import LimiterMixin
+from requests_ratelimiter import LimiterMixin, RedisBucket
 
 
 class CachedLimiterSession(CacheMixin, LimiterMixin, Session):
