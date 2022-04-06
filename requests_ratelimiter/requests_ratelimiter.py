@@ -54,7 +54,7 @@ class LimiterMixin(MIXIN_BASE):
         bucket_kwargs: Dict = None,
         limiter: Limiter = None,
         max_delay: Union[int, float] = None,
-        per_host: bool = False,
+        per_host: bool = True,
         limit_statuses: Iterable[int] = (429,),
         **kwargs,
     ):
@@ -104,15 +104,31 @@ class LimiterMixin(MIXIN_BASE):
         return urlparse(request.url).netloc if self.per_host else self._default_bucket
 
     def _fill_bucket(self, request: PreparedRequest):
-        """Fill the bucket for the given request, indicating no more requests are avaliable"""
+        """Partially fill the bucket for the given request, requiring an extra delay until the next
+        request. This is essentially an attempt to catch up to the actual (server-side) limit if
+        we've gotten out of sync.
+
+        If the server tracks multiple limits, there's no way to know which specific limit was
+        exceeded. So will use the smallest rate will be used.
+
+        For example, if the server allows 60 requests per minute, and we've tracked only 40 requests
+        but received a 429 response, 20 additional "filler" requests will be added to the bucket to
+        attempt to catch up to the server-side limit.
+
+        If the server also has an hourly limit, we don't have enough information to know if we've
+        exceeded that limit or how long to delay, so we'll keep delaying in 1-minute intervals.
+        """
         logger.info(f'Rate limit exceeded for {request.url}; filling limiter bucket')
         bucket = self.limiter.bucket_group[self._bucket_name(request)]
-        now = self.limiter.time_function()
 
-        # Bucket.put() will return 1 until full
-        while True:
-            if bucket.put(now) != 1:
-                break
+        # Determine how many requests we've made within the smallest defined time interval
+        now = self.limiter.time_function()
+        rate = self.limiter._rates[0]
+        item_count, _ = bucket.inspect_expired_items(now - rate.interval)
+
+        # Add "filler" requests to reach the limit for that interval
+        for _ in range(rate.limit - item_count):
+            bucket.put(now)
 
 
 class LimiterSession(LimiterMixin, Session):
