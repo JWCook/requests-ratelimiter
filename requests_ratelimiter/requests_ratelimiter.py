@@ -58,10 +58,6 @@ class LimiterMixin(MIXIN_BASE):
         limit_statuses: Iterable[int] = (429,),
         **kwargs,
     ):
-        self._default_bucket = str(uuid4())
-        bucket_kwargs = bucket_kwargs or {}
-        bucket_kwargs.setdefault('bucket_name', self._default_bucket)
-
         # Translate request rate values into RequestRate objects
         rates = [
             RequestRate(limit, interval)
@@ -81,6 +77,7 @@ class LimiterMixin(MIXIN_BASE):
         self.limit_statuses = limit_statuses
         self.max_delay = max_delay
         self.per_host = per_host
+        self._default_bucket = str(uuid4())
 
         # If the superclass is an adapter or custom Session, pass along any valid keyword arguments
         session_kwargs = get_valid_kwargs(super().__init__, kwargs)
