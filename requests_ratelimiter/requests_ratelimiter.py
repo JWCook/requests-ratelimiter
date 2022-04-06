@@ -5,7 +5,7 @@ from urllib.parse import urlparse
 from uuid import uuid4
 
 from pyrate_limiter import Duration, Limiter, RequestRate
-from pyrate_limiter.bucket import AbstractBucket, MemoryListBucket
+from pyrate_limiter.bucket import AbstractBucket, MemoryQueueBucket
 from requests import PreparedRequest, Response, Session
 from requests.adapters import HTTPAdapter
 
@@ -34,7 +34,8 @@ class LimiterMixin(MIXIN_BASE):
         per_day: Max requests per day
         per_month: Max requests per month
         burst: Max number of consecutive requests allowed before applying per-second rate-limiting
-        bucket_class: Bucket backend class; either ``MemoryQueueBucket`` (default) or ``RedisBucket``
+        bucket_class: Bucket backend class; may be one of ``MemoryQueueBucket`` (default),
+            ``SQLiteBucket``, or ``RedisBucket``
         bucket_kwargs: Bucket backend keyword arguments
         limiter: An existing Limiter object to use instead of the above params
         max_delay: The maximum allowed delay time (in seconds); anything over this will abort the
@@ -50,7 +51,7 @@ class LimiterMixin(MIXIN_BASE):
         per_day: float = 0,
         per_month: float = 0,
         burst: float = 1,
-        bucket_class: Type[AbstractBucket] = MemoryListBucket,
+        bucket_class: Type[AbstractBucket] = MemoryQueueBucket,
         bucket_kwargs: Dict = None,
         limiter: Limiter = None,
         max_delay: Union[int, float] = None,
