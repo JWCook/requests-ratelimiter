@@ -1,7 +1,7 @@
 """Config file for Sphinx documentation"""
 
 # General information about the project.
-copyright = '2021, Jordan Cook'
+copyright = '2022, Jordan Cook'
 exclude_patterns = ['_build']
 master_doc = 'index'
 needs_sphinx = '4.0'
@@ -26,6 +26,8 @@ intersphinx_mapping = {
     'python': ('https://docs.python.org/3', None),
     'requests': ('https://docs.python-requests.org/en/stable/', None),
     'urllib3': ('https://urllib3.readthedocs.io/en/stable/', None),
+    # TODO: publish pyrate-limiter on readthedocs
+    # 'pyrate_limiter': ('https://pyrate-limiter.readthedocs.io/en/stable/', None),
 }
 
 # napoleon settings

@@ -1,6 +1,6 @@
 API Reference
 =============
-.. currentmodule:: requests_ratelimiter.requests_ratelimiter
+.. currentmodule:: requests_ratelimiter
 
 .. autosummary::
    :nosignatures:
