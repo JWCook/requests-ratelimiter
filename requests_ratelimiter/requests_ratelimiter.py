@@ -1,5 +1,6 @@
 from inspect import signature
 from logging import getLogger
+from time import time
 from typing import TYPE_CHECKING, Callable, Dict, Iterable, Type, Union
 from urllib.parse import urlparse
 from uuid import uuid4
@@ -54,6 +55,7 @@ class LimiterMixin(MIXIN_BASE):
         burst: float = 1,
         bucket_class: Type[AbstractBucket] = MemoryQueueBucket,
         bucket_kwargs: Dict = None,
+        time_function: Callable[..., float] = None,
         limiter: Limiter = None,
         max_delay: Union[int, float] = None,
         per_host: bool = True,
@@ -73,8 +75,15 @@ class LimiterMixin(MIXIN_BASE):
             if limit
         ]
 
+        # If using a persistent backend, we don't want to use monotonic time (the default)
+        if bucket_class != MemoryQueueBucket and not time_function:
+            time_function = time
+
         self.limiter = limiter or Limiter(
-            *rates, bucket_class=bucket_class, bucket_kwargs=bucket_kwargs
+            *rates,
+            bucket_class=bucket_class,
+            bucket_kwargs=bucket_kwargs,
+            time_function=time_function,
         )
         self.limit_statuses = limit_statuses
         self.max_delay = max_delay
