@@ -9,7 +9,7 @@ status](https://github.com/JWCook/requests-ratelimiter/workflows/Build/badge.svg
 [![PyPI - Format](https://img.shields.io/pypi/format/requests-ratelimiter?color=blue)](https://pypi.org/project/requests-ratelimiter)
 
 This package is a simple wrapper around [pyrate-limiter](https://github.com/vutran1710/PyrateLimiter)
-that adds convenient integration with the [requests](https://github.com/psf/requests) library.
+that adds convenient integration with the [requests](https://requests.readthedocs.io) library.
 
 Full project documentation can be found at [requests-ratelimiter.readthedocs.io](https://requests-ratelimiter.readthedocs.io).
 
@@ -21,8 +21,8 @@ Full project documentation can be found at [requests-ratelimiter.readthedocs.io]
 * `requests-ratelimiter` adds some extra conveniences specific to sending HTTP requests with the
   `requests` library
 * It can be used as either a
-  [session](https://docs.python-requests.org/en/master/user/advanced/#session-objects) or a
-  [transport adapter](https://docs.python-requests.org/en/master/user/advanced/#transport-adapters)
+  [session](https://requests.readthedocs.io/en/latest/user/advanced/#session-objects) or a
+  [transport adapter](https://requests.readthedocs.io/en/latest/user/advanced/#transport-adapters)
 * It can also be used as a mixin, for compatibility with other `requests`-based libraries
 * Rate limits are tracked separately per host
 * Different rate limits can optionally be applied to different hosts
@@ -39,7 +39,7 @@ There are three ways to use `requests-ratelimiter`:
 
 ### Session
 The simplest option is `LimiterSession`, which can be used as a drop-in replacement for
-[`requests.Session`](https://docs.python-requests.org/en/master/api/#requests.Session).
+[`requests.Session`](https://requests.readthedocs.io/en/latest/api/#requests.Session).
 
 Example:
 ```python
@@ -183,8 +183,8 @@ session = LimiterSession(per_second=5, limit_statuses=[])
 # Compatibility
 There are many other useful libraries out there that add features to `requests`, most commonly by
 extending or modifying
-[requests.Session](https://docs.python-requests.org/en/master/api/#requests.Session) or
-[requests.HTTPAdapter](https://docs.python-requests.org/en/master/api/#requests.adapters.HTTPAdapter).
+[requests.Session](https://requests.readthedocs.io/en/latest/api/#requests.Session) or
+[requests.HTTPAdapter](https://requests.readthedocs.io/en/latest/api/#requests.adapters.HTTPAdapter).
 
 To use `requests-ratelimiter` with one of these libraries, you have a few different options:
 1. If the library provides a custom `Session` class, mount a `LimiterAdapter` on it

@@ -144,14 +144,14 @@ class LimiterMixin(MIXIN_BASE):
 
 
 class LimiterSession(LimiterMixin, Session):
-    """`Session <https://docs.python-requests.org/en/master/user/advanced/#session-objects>`_
+    """`Session <https://requests.readthedocs.io/en/latest/user/advanced/#session-objects>`_
     that adds rate-limiting behavior to requests.
     """
 
 
 class LimiterAdapter(LimiterMixin, HTTPAdapter):  # type: ignore  # send signature accepts **kwargs
     """`Transport adapter
-    <https://docs.python-requests.org/en/master/user/advanced/#transport-adapters>`_
+    <https://requests.readthedocs.io/en/latest/user/advanced/#transport-adapters>`_
     that adds rate-limiting behavior to requests.
     """
 
