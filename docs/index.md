@@ -5,4 +5,5 @@
 ```{toctree}
 :titlesonly: true
 reference
+history
 ```
