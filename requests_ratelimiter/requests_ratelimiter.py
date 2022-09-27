@@ -20,29 +20,7 @@ logger = getLogger(__name__)
 class LimiterMixin(MIXIN_BASE):
     """Mixin class that adds rate-limiting behavior to requests.
 
-    The following parameters also apply to :py:class:`.LimiterSession` and
-    :py:class:`.LimiterAdapter`.
-
-    .. note::
-        The ``per_*`` params are aliases for the most common rate limit
-        intervals; for more complex rate limits, you can provide a
-        :py:class:`~pyrate_limiter.limiter.Limiter` object instead.
-
-    Args:
-        per_second: Max requests per second
-        per_minute: Max requests per minute
-        per_hour: Max requests per hour
-        per_day: Max requests per day
-        per_month: Max requests per month
-        burst: Max number of consecutive requests allowed before applying per-second rate-limiting
-        bucket_class: Bucket backend class; may be one of :py:class:`.MemoryQueueBucket` (default),
-            :py:class:`.SQLiteBucket`, or :py:class:`.RedisBucket`
-        bucket_kwargs: Bucket backend keyword arguments
-        limiter: An existing Limiter object to use instead of the above params
-        max_delay: The maximum allowed delay time (in seconds); anything over this will abort the
-            request and raise a :py:exc:`.BucketFullException`
-        per_host: Track request rate limits separately for each host
-        limit_statuses: Alternative HTTP status codes that indicate a rate limit was exceeded
+    See :py:class:`.LimiterSession` for parameter details.
     """
 
     def __init__(
@@ -146,6 +124,32 @@ class LimiterMixin(MIXIN_BASE):
 class LimiterSession(LimiterMixin, Session):
     """`Session <https://requests.readthedocs.io/en/latest/user/advanced/#session-objects>`_
     that adds rate-limiting behavior to requests.
+
+    The following parameters also apply to :py:class:`.LimiterMixin` and
+    :py:class:`.LimiterAdapter`.
+
+    .. note::
+        The ``per_*`` params are aliases for the most common rate limit
+        intervals; for more complex rate limits, you can provide a
+        :py:class:`~pyrate_limiter.limiter.Limiter` object instead.
+
+    Args:
+        per_second: Max requests per second
+        per_minute: Max requests per minute
+        per_hour: Max requests per hour
+        per_day: Max requests per day
+        per_month: Max requests per month
+        burst: Max number of consecutive requests allowed before applying per-second rate-limiting
+        bucket_class: Bucket backend class; may be one of
+            :py:class:`~pyrate_limiter.bucket.MemoryQueueBucket` (default),
+            :py:class:`~pyrate_limiter.sqlite_bucket.SQLiteBucket`, or
+            :py:class:`~pyrate_limiter.bucket.RedisBucket`
+        bucket_kwargs: Bucket backend keyword arguments
+        limiter: An existing Limiter object to use instead of the above params
+        max_delay: The maximum allowed delay time (in seconds); anything over this will abort the
+            request and raise a :py:exc:`.BucketFullException`
+        per_host: Track request rate limits separately for each host
+        limit_statuses: Alternative HTTP status codes that indicate a rate limit was exceeded
     """
 
 
@@ -153,6 +157,8 @@ class LimiterAdapter(LimiterMixin, HTTPAdapter):  # type: ignore  # send signatu
     """`Transport adapter
     <https://requests.readthedocs.io/en/latest/user/advanced/#transport-adapters>`_
     that adds rate-limiting behavior to requests.
+
+    See :py:class:`.LimiterSession` for parameter details.
     """
 
 

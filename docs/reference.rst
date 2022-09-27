@@ -5,11 +5,9 @@ API Reference
 .. autosummary::
    :nosignatures:
 
-   LimiterMixin
    LimiterSession
    LimiterAdapter
-
-.. autoclass:: LimiterMixin
+   LimiterMixin
 
 .. autoclass:: LimiterSession
    :members:
@@ -20,3 +18,5 @@ API Reference
    :members:
    :show-inheritance:
    :inherited-members:
+
+.. autoclass:: LimiterMixin

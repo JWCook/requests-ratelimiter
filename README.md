@@ -8,7 +8,7 @@ status](https://github.com/JWCook/requests-ratelimiter/workflows/Build/badge.svg
 [![PyPI - Python Versions](https://img.shields.io/pypi/pyversions/requests-ratelimiter)](https://pypi.org/project/requests-ratelimiter)
 [![PyPI - Format](https://img.shields.io/pypi/format/requests-ratelimiter?color=blue)](https://pypi.org/project/requests-ratelimiter)
 
-This package is a simple wrapper around [pyrate-limiter](https://github.com/vutran1710/PyrateLimiter)
+This package is a simple wrapper around [pyrate-limiter](https://pyratelimiter.readthedocs.io)
 that adds convenient integration with the [requests](https://requests.readthedocs.io) library.
 
 Full project documentation can be found at [requests-ratelimiter.readthedocs.io](https://requests-ratelimiter.readthedocs.io).
@@ -38,25 +38,49 @@ pip install requests-ratelimiter
 There are three ways to use `requests-ratelimiter`:
 
 ### Session
-The simplest option is `LimiterSession`, which can be used as a drop-in replacement for
+The simplest option is
+[`LimiterSession`](https://requests-ratelimiter.readthedocs.io/en/stable/reference.html#requests_ratelimiter.LimiterSession),
+which can be used as a drop-in replacement for
 [`requests.Session`](https://requests.readthedocs.io/en/latest/api/#requests.Session).
 
 Example:
 ```python
 from requests_ratelimiter import LimiterSession
+from time import time
 
-# Apply a rate-limit (5 requests per second) to all requests
+# Apply a rate limit of 5 requests per second to all requests
 session = LimiterSession(per_second=5)
+start = time()
 
-# Send rate-limited requests that stay within 5 requests per second
-for _ in range(10):
+# Send requests that stay within the defined rate limit
+for i in range(20):
     response = session.get('https://httpbin.org/get')
-    print(response.json())
+    print(f'[t+{time()-start:.2f}] Sent request {i+1}')
+```
+
+Example output:
+```bash
+[t+0.22] Sent request 1
+[t+0.26] Sent request 2
+[t+0.30] Sent request 3
+[t+0.34] Sent request 4
+[t+0.39] Sent request 5
+[t+1.24] Sent request 6
+[t+1.28] Sent request 7
+[t+1.32] Sent request 8
+[t+1.37] Sent request 9
+[t+1.41] Sent request 10
+[t+2.04] Sent request 11
+...
 ```
 
 ### Adapter
-Example with `LimiterAdapter`:
+For more advanced usage,
+[`LimiterAdapter`](https://requests-ratelimiter.readthedocs.io/en/stable/reference.html#requests_ratelimiter.LimiterAdapter)
+is available to be used as a
+[transport adapter](https://requests.readthedocs.io/en/latest/user/advanced/#transport-adapters).
 
+Example:
 ```python
 from requests import Session
 from requests_ratelimiter import LimiterAdapter
@@ -75,8 +99,10 @@ for user_id in range(100):
 ```
 
 ### Mixin
-`LimiterMixin` is available for advanced use cases where you want add rate-limiting features to
-a custom session or adapter class. See
+Finally,
+[`LimiterMixin`](https://requests-ratelimiter.readthedocs.io/en/stable/reference.html#requests_ratelimiter.LimiterMixin)
+is available for advanced use cases in which you want add rate-limiting features to a custom session
+or adapter class. See
 [Custom Session Example](#custom-session-example-requests-cache) below for an example.
 
 ## Rate Limit Settings
@@ -94,7 +120,8 @@ The following parameters are available for the most common rate limit intervals:
 ### Advanced Settings
 If you need to define more complex rate limits, you can create a `Limiter` object instead:
 ```python
-from requests_ratelimiter import Duration, RequestRate, Limiter, LimiterSession
+from pyrate_limiter import Duration, RequestRate, Limiter
+from requests_ratelimiter LimiterSession
 
 nanocentury_rate = RequestRate(10, Duration.SECOND * 3.156)
 fortnight_rate = RequestRate(1000, Duration.DAY * 14)
@@ -104,25 +131,25 @@ limiter = Limiter(nanocentury_rate, fortnight_rate, trimonthly_rate)
 session = LimiterSession(limiter=limiter)
 ```
 
-See [pyrate-limiter docs](https://github.com/vutran1710/PyrateLimiter#strategies) for more details.
+See [pyrate-limiter docs](https://pyratelimiter.readthedocs.io/en/latest/#basic-usage) for more `Limiter` usage details.
 
 ## Backends
 By default, rate limits are tracked in memory and are not persistent. You can optionally use either
 SQLite or Redis to persist rate limits across threads, processes, and/or application restarts.
 You can specify which backend to use with the `bucket_class` argument. For example, to use SQLite:
 ```python
-from requests_ratelimiter import LimiterSession, SQLiteBucket
+from pyrate_limiter import SQLiteBucket
+from requests_ratelimiter import LimiterSession
 
 session = LimiterSession(per_second=5, bucket_class=SQLiteBucket)
 ```
 
-See [pyrate-limiter docs](https://github.com/vutran1710/PyrateLimiter#bucket-backends) for more details.
+See [pyrate-limiter docs](https://pyratelimiter.readthedocs.io/en/latest/#backends) for more details.
 
 ## Other Features
 ### Per-Host Rate Limit Tracking
-With either `LimiterSession` or `LimiterAdapter`, rate limits are tracked separately
-for each host. In other words, requests sent to one host will not count against the rate limit for
-any other hosts:
+With either `LimiterSession` or `LimiterAdapter`, rate limits are tracked separately for each host.
+In other words, requests sent to one host will not count against the rate limit for any other hosts:
 
 ```python
 session = LimiterSession(per_second=5)
@@ -193,7 +220,7 @@ To use `requests-ratelimiter` with one of these libraries, you have a few differ
    class with features from both libraries
 
 ## Custom Session Example: Requests-Cache
-For example, to combine with [requests-cache](https://github.com/reclosedev/requests-cache), which
+For example, to combine with [requests-cache](https://github.com/requests-cache/requests-cache), which
 also includes a separate mixin class:
 ```python
 from requests import Session

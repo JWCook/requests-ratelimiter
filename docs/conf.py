@@ -26,8 +26,7 @@ intersphinx_mapping = {
     'python': ('https://docs.python.org/3', None),
     'requests': ('https://requests.readthedocs.io/en/latest/', None),
     'urllib3': ('https://urllib3.readthedocs.io/en/stable/', None),
-    # TODO: publish pyrate-limiter on readthedocs
-    # 'pyrate_limiter': ('https://pyrate-limiter.readthedocs.io/en/stable/', None),
+    'pyrate_limiter': ('https://pyratelimiter.readthedocs.io/en/latest/', None),
 }
 
 # napoleon settings
