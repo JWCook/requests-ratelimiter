@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 from uuid import uuid4
 
 from pyrate_limiter import Duration, Limiter, RequestRate
-from pyrate_limiter.bucket import AbstractBucket, MemoryQueueBucket
+from pyrate_limiter.bucket import AbstractBucket, MemoryListBucket, MemoryQueueBucket
 from requests import PreparedRequest, Response, Session
 from requests.adapters import HTTPAdapter
 
@@ -31,7 +31,7 @@ class LimiterMixin(MIXIN_BASE):
         per_day: float = 0,
         per_month: float = 0,
         burst: float = 1,
-        bucket_class: Type[AbstractBucket] = MemoryQueueBucket,
+        bucket_class: Type[AbstractBucket] = MemoryListBucket,
         bucket_kwargs: Dict = None,
         time_function: Callable[..., float] = None,
         limiter: Limiter = None,
@@ -54,7 +54,7 @@ class LimiterMixin(MIXIN_BASE):
         ]
 
         # If using a persistent backend, we don't want to use monotonic time (the default)
-        if bucket_class != MemoryQueueBucket and not time_function:
+        if bucket_class not in (MemoryListBucket, MemoryQueueBucket) and not time_function:
             time_function = time
 
         self.limiter = limiter or Limiter(
@@ -115,6 +115,10 @@ class LimiterMixin(MIXIN_BASE):
         now = self.limiter.time_function()
         rate = self.limiter._rates[0]
         item_count, _ = bucket.inspect_expired_items(now - rate.interval)
+
+        # TODO: After fixing usage with MemoryQueueBucket on py 3.11, don't add items over capacity
+        # capacity = bucket.maxsize() - bucket.size()
+        # n_filler_requests = min(capacity, rate.limit - item_count)
 
         # Add "filler" requests to reach the limit for that interval
         for _ in range(rate.limit - item_count):
