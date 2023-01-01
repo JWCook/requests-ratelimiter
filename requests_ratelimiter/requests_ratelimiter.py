@@ -1,7 +1,7 @@
 from inspect import signature
 from logging import getLogger
 from time import time
-from typing import TYPE_CHECKING, Callable, Dict, Iterable, Type, Union
+from typing import TYPE_CHECKING, Callable, Dict, Iterable, Optional, Type, Union
 from urllib.parse import urlparse
 from uuid import uuid4
 
@@ -32,10 +32,10 @@ class LimiterMixin(MIXIN_BASE):
         per_month: float = 0,
         burst: float = 1,
         bucket_class: Type[AbstractBucket] = MemoryListBucket,
-        bucket_kwargs: Dict = None,
-        time_function: Callable[..., float] = None,
-        limiter: Limiter = None,
-        max_delay: Union[int, float] = None,
+        bucket_kwargs: Optional[Dict] = None,
+        time_function: Optional[Callable[..., float]] = None,
+        limiter: Optional[Limiter] = None,
+        max_delay: Union[int, float, None] = None,
         per_host: bool = True,
         limit_statuses: Iterable[int] = (429,),
         **kwargs,
