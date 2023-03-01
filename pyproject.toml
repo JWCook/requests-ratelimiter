@@ -45,7 +45,7 @@ requests-mock = "^1.10"
 
 # Workarounds for possible dependency issues with importlib-metadata
 typing-extensions = "^4.3"
-zipp = "^3.10"
+zipp = "^3.15"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
