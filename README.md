@@ -121,7 +121,7 @@ The following parameters are available for the most common rate limit intervals:
 If you need to define more complex rate limits, you can create a `Limiter` object instead:
 ```python
 from pyrate_limiter import Duration, RequestRate, Limiter
-from requests_ratelimiter LimiterSession
+from requests_ratelimiter import LimiterSession
 
 nanocentury_rate = RequestRate(10, Duration.SECOND * 3.156)
 fortnight_rate = RequestRate(1000, Duration.DAY * 14)
