@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "requests-ratelimiter"
-version = "0.4.0"
+version = "0.4.1"
 description = "Rate-limiting for the requests library"
 authors = ["Jordan Cook"]
 license = "MIT"
@@ -25,10 +25,10 @@ pyrate-limiter = ">=2.8"
 requests = ">=2.20"
 
 # Documentation dependencies needed for Readthedocs builds
-furo = {version="2022.9.15", optional=true}
+furo = {version="^2022.12", optional=true}
 myst-parser = {version=">=0.17", optional=true}
 sphinx = {version="^5.2", optional=true}
-sphinx-autodoc-typehints = {version="^1.17", optional=true}
+sphinx-autodoc-typehints = {version="^1.22", optional=true}
 sphinx-copybutton = {version=">=0.5", optional=true}
 
 [tool.poetry.extras]
@@ -36,16 +36,12 @@ docs = ["furo", "myst-parser", "sphinx", "sphinx-autodoc-typehints",
         "sphinx-copybutton", "sphinxcontrib-apidoc"]
 
 [tool.poetry.dev-dependencies]
-coverage = "^7.0"
+coverage = "^7.2"
 pre-commit = "^2.21"
 pytest = "^7.2"
 pytest-cov = ">=4.0"
 pytest-xdist = ">=3.1"
 requests-mock = "^1.10"
-
-# Workarounds for possible dependency issues with importlib-metadata
-typing-extensions = "^4.3"
-zipp = "^3.10"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
