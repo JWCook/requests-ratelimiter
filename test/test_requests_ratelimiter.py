@@ -14,7 +14,8 @@ from time import sleep
 from unittest.mock import patch
 
 from pyrate_limiter import Duration, Limiter, RequestRate
-from requests import Session
+from requests import Response, Session
+from requests.adapters import HTTPAdapter
 
 from requests_ratelimiter import LimiterAdapter, LimiterMixin, LimiterSession
 
@@ -36,16 +37,24 @@ def test_limiter_session(mock_sleep):
 
 
 @patch_sleep
-def test_limiter_adapter(mock_sleep):
+@patch.object(HTTPAdapter, 'send')
+def test_limiter_adapter(mock_send, mock_sleep):
+    # To allow mounting a mock:// URL, we need to patch HTTPAdapter.send()
+    # so it doesn't validate the protocol
+    mock_response = Response()
+    mock_response.url = MOCKED_URL
+    mock_response.status = 200
+    mock_send.return_value = mock_response
+
     session = Session()
     adapter = LimiterAdapter(per_second=5)
-    session.mount('https://', adapter)
+    session.mount('http+mock://', adapter)
 
     for _ in range(5):
-        session.get('https://httpbin.org/get')
+        session.get(MOCKED_URL)
     assert mock_sleep.called is False
 
-    session.get('https://httpbin.org/get')
+    session.get(MOCKED_URL)
     assert mock_sleep.called is True
 
 
