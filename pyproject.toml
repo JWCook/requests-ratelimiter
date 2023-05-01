@@ -38,7 +38,7 @@ docs = ["furo", "myst-parser", "sphinx", "sphinx-autodoc-typehints",
 [tool.poetry.dev-dependencies]
 coverage = "^7.2"
 pre-commit = "^2.21"
-pytest = "^7.2"
+pytest = "^7.3"
 pytest-cov = ">=4.0"
 pytest-xdist = ">=3.1"
 requests-mock = "^1.10"
