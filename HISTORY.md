@@ -1,9 +1,12 @@
 # History
 
+## 0.4.1 (2023-07-24)
+* Add support for python 3.12
+
 ## 0.4.0 (2022-09-27)
 * Drop support for python 3.6
 * Add support for python 3.11
-* Remove upper version constraint for non-dev dependencies
+* Remove upper version constraint for `requests`
 
 ## 0.3.2 (2022-05-09)
 * Default to not using monotonic time if using a persistent backend (SQLite or Redis)
