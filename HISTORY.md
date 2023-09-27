@@ -1,4 +1,6 @@
 # History
+## 0.4.2 (2023-09-27)
+* Update conda-forge package to restrict pyrate-limiter to <3.0
 
 ## 0.4.1 (2023-07-24)
 * Add support for python 3.12
