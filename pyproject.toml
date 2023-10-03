@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "requests-ratelimiter"
-version = "0.4.2"
+version = "0.4.3"
 description = "Rate-limiting for the requests library"
 authors = ["Jordan Cook"]
 license = "MIT"
@@ -71,6 +71,6 @@ known_first_party = ['tests']
 ignore_missing_imports = true
 
 [tool.ruff]
-format = 'grouped'
+output-format = 'grouped'
 line-length = 120
 select = ['B', 'C4','C90', 'E', 'F']
