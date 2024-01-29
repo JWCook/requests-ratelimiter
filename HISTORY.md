@@ -1,6 +1,6 @@
 # History
 
-## 0.5.0 (Unreleased)
+## 0.5.0 (2023-01-29)
 * Add support for floating point values for rate limits
 
 ## 0.4.2 (2023-09-27)

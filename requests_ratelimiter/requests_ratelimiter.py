@@ -174,11 +174,8 @@ class LimiterAdapter(LimiterMixin, HTTPAdapter):  # type: ignore  # send signatu
 
 def _convert_rate(limit: float, interval: float) -> RequestRate:
     """Handle fractional rate limits by converting to a whole number of requests per interval"""
-    # Convert both limit and interval to fractions, and adjust for floating point weirdness
-    f1 = Fraction(limit).limit_denominator(1000)
-    f2 = Fraction(interval).limit_denominator(1000)
-    rate_fraction = f1 / f2
-    return RequestRate(rate_fraction.numerator, rate_fraction.denominator)
+    fraction = Fraction(limit).limit_denominator(1000)  # adjust for floating point weirdness
+    return RequestRate(fraction.numerator, interval * fraction.denominator)
 
 
 def _get_valid_kwargs(func: Callable, kwargs: Dict) -> Dict:

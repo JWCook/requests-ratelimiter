@@ -147,9 +147,8 @@ def test_limit_status_disabled(mock_sleep):
     [
         (5, 1, 5, 1),
         (0.5, 1, 1, 2),
-        (1, 0.5, 2, 1),
-        (0.1, 0.5, 1, 5),
-        (0.001, 0.05, 1, 50),
+        (1, 0.5, 1, 0.5),
+        (0.001, 1, 1, 1000),
     ],
 )
 def test_convert_rate(limit, interval, expected_limit, expected_interval):
