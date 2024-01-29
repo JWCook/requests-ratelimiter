@@ -2,6 +2,7 @@
 General rate-limiting behavior is covered by pyrate-limiter unit tests. These tests should cover
 additional behavior specific to requests-ratelimiter.
 """
+
 from test.conftest import (
     MOCKED_URL,
     MOCKED_URL_429,

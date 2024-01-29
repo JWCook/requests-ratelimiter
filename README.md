@@ -8,17 +8,17 @@ status](https://github.com/JWCook/requests-ratelimiter/workflows/Build/badge.svg
 [![PyPI - Python Versions](https://img.shields.io/pypi/pyversions/requests-ratelimiter)](https://pypi.org/project/requests-ratelimiter)
 [![PyPI - Format](https://img.shields.io/pypi/format/requests-ratelimiter?color=blue)](https://pypi.org/project/requests-ratelimiter)
 
-This package is a simple wrapper around [pyrate-limiter](https://pyratelimiter.readthedocs.io)
+This package is a simple wrapper around [pyrate-limiter v2](https://github.com/vutran1710/PyrateLimiter/tree/v2.10.0)
 that adds convenient integration with the [requests](https://requests.readthedocs.io) library.
 
 Full project documentation can be found at [requests-ratelimiter.readthedocs.io](https://requests-ratelimiter.readthedocs.io).
 
 
 # Features
-* `pyrate-limiter` is a general-purpose rate limiting library that implements the leaky bucket
+* `pyrate-limiter` is a general-purpose rate-limiting library that implements the leaky bucket
   algorithm, supports multiple rate limits, and has optional persistence with SQLite and Redis
   backends
-* `requests-ratelimiter` adds some extra conveniences specific to sending HTTP requests with the
+* `requests-ratelimiter` adds some conveniences for sending rate-limited HTTP requests with the
   `requests` library
 * It can be used as either a
   [session](https://requests.readthedocs.io/en/latest/user/advanced/#session-objects) or a
