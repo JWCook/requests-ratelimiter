@@ -72,5 +72,5 @@ ignore_missing_imports = true
 
 [tool.ruff]
 output-format = 'grouped'
-line-length = 120
+line-length = 110
 select = ['B', 'C4','C90', 'E', 'F']

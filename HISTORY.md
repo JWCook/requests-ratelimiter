@@ -1,4 +1,8 @@
 # History
+
+## 0.5.0 (Unreleased)
+* Add support for floating point values for rate limits
+
 ## 0.4.2 (2023-09-27)
 * Update conda-forge package to restrict pyrate-limiter to <3.0
 

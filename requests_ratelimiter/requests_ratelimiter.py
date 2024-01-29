@@ -1,3 +1,4 @@
+from fractions import Fraction
 from inspect import signature
 from logging import getLogger
 from time import time
@@ -42,7 +43,7 @@ class LimiterMixin(MIXIN_BASE):
     ):
         # Translate request rate values into RequestRate objects
         rates = [
-            RequestRate(limit, interval)
+            _convert_rate(limit, interval)
             for interval, limit in {
                 Duration.SECOND * burst: per_second * burst,
                 Duration.MINUTE: per_minute,
@@ -52,6 +53,11 @@ class LimiterMixin(MIXIN_BASE):
             }.items()
             if limit
         ]
+        if rates and not limiter:
+            logger.debug(
+                "Creating Limiter with rates:\n%s",
+                "\n".join([f"{r.limit}/{r.interval}s" for r in rates]),
+            )
 
         # If using a persistent backend, we don't want to use monotonic time (the default)
         if bucket_class not in (MemoryListBucket, MemoryQueueBucket) and not time_function:
@@ -69,7 +75,7 @@ class LimiterMixin(MIXIN_BASE):
         self._default_bucket = str(uuid4())
 
         # If the superclass is an adapter or custom Session, pass along any valid keyword arguments
-        session_kwargs = get_valid_kwargs(super().__init__, kwargs)
+        session_kwargs = _get_valid_kwargs(super().__init__, kwargs)
         super().__init__(**session_kwargs)  # type: ignore  # Base Session doesn't take any kwargs
 
     # Conveniently, both Session.send() and HTTPAdapter.send() have a mostly consistent signature
@@ -108,7 +114,7 @@ class LimiterMixin(MIXIN_BASE):
         If the server also has an hourly limit, we don't have enough information to know if we've
         exceeded that limit or how long to delay, so we'll keep delaying in 1-minute intervals.
         """
-        logger.info(f'Rate limit exceeded for {request.url}; filling limiter bucket')
+        logger.info(f"Rate limit exceeded for {request.url}; filling limiter bucket")
         bucket = self.limiter.bucket_group[self._bucket_name(request)]
 
         # Determine how many requests we've made within the smallest defined time interval
@@ -166,7 +172,16 @@ class LimiterAdapter(LimiterMixin, HTTPAdapter):  # type: ignore  # send signatu
     """
 
 
-def get_valid_kwargs(func: Callable, kwargs: Dict) -> Dict:
+def _convert_rate(limit: float, interval: float) -> RequestRate:
+    """Handle fractional rate limits by converting to a whole number of requests per interval"""
+    # Convert both limit and interval to fractions, and adjust for floating point weirdness
+    f1 = Fraction(limit).limit_denominator(1000)
+    f2 = Fraction(interval).limit_denominator(1000)
+    rate_fraction = f1 / f2
+    return RequestRate(rate_fraction.numerator, rate_fraction.denominator)
+
+
+def _get_valid_kwargs(func: Callable, kwargs: Dict) -> Dict:
     """Get the subset of non-None ``kwargs`` that are valid params for ``func``"""
     sig_params = list(signature(func).parameters)
     return {k: v for k, v in kwargs.items() if k in sig_params and v is not None}
