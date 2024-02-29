@@ -39,6 +39,7 @@ class LimiterMixin(MIXIN_BASE):
         max_delay: Union[int, float, None] = None,
         per_host: bool = True,
         limit_statuses: Iterable[int] = (429,),
+        bucket_name: Optional[str] = None,
         **kwargs,
     ):
         # Translate request rate values into RequestRate objects
@@ -72,6 +73,7 @@ class LimiterMixin(MIXIN_BASE):
         self.limit_statuses = limit_statuses
         self.max_delay = max_delay
         self.per_host = per_host
+        self.bucket_name = bucket_name
         self._default_bucket = str(uuid4())
 
         # If the superclass is an adapter or custom Session, pass along any valid keyword arguments
@@ -97,7 +99,12 @@ class LimiterMixin(MIXIN_BASE):
 
     def _bucket_name(self, request):
         """Get a bucket name for the given request"""
-        return urlparse(request.url).netloc if self.per_host else self._default_bucket
+        if self.bucket_name:
+            return self.bucket_name
+        elif self.per_host:
+            return urlparse(request.url).netloc
+        else:
+            return self._default_bucket
 
     def _fill_bucket(self, request: PreparedRequest):
         """Partially fill the bucket for the given request, requiring an extra delay until the next

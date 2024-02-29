@@ -189,6 +189,18 @@ session.get('https://api.some_site.com/v1/')
 session.get('https://api.some_site.com/v1/users/1234')
 ```
 
+### Custom Tracking
+For advanced use cases, you can define your own custom tracking behavior with the `bucket` option.
+For example, an API that enforces rate limits based on a tenant ID, this feature can be used to track
+rate limits per tenant. If `bucket` is specified, host tracking is disabled.
+
+Note: It is advisable to use SQLite or Redis backends when using custom tracking because using the default backend
+each session will track rate limits independently, even if both sessions call the same URL.
+```python
+sessionA = LimiterSession(per_second=5, bucket='tenant1')
+sessionB = LimiterSession(per_second=5, bucket='tenant2')
+```
+
 ### Rate Limit Error Handling
 Sometimes, server-side rate limiting may not behave exactly as documented (or may not be documented
 at all). Or you might encounter other scenarios where your client-side limit gets out of sync with
