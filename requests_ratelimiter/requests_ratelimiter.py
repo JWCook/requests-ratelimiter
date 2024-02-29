@@ -39,7 +39,7 @@ class LimiterMixin(MIXIN_BASE):
         max_delay: Union[int, float, None] = None,
         per_host: bool = True,
         limit_statuses: Iterable[int] = (429,),
-        bucket: Optional[str] = None,
+        bucket_name: Optional[str] = None,
         **kwargs,
     ):
         # Translate request rate values into RequestRate objects
@@ -73,7 +73,7 @@ class LimiterMixin(MIXIN_BASE):
         self.limit_statuses = limit_statuses
         self.max_delay = max_delay
         self.per_host = per_host
-        self.bucket = bucket
+        self.bucket_name = bucket_name
         self._default_bucket = str(uuid4())
 
         # If the superclass is an adapter or custom Session, pass along any valid keyword arguments
@@ -87,9 +87,8 @@ class LimiterMixin(MIXIN_BASE):
         Raises:
             :py:exc:`.BucketFullException` if this request would result in a delay longer than ``max_delay``
         """
-        bucket_name = self.bucket or self._bucket_name(request)
         with self.limiter.ratelimit(
-            bucket_name,
+            self._bucket_name(request),
             delay=True,
             max_delay=self.max_delay,
         ):
