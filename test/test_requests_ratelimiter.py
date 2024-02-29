@@ -95,6 +95,7 @@ def test_custom_session(mock_sleep):
     session.get(MOCKED_URL)
     assert mock_sleep.called is True
 
+
 @patch_sleep
 def test_custom_bucket(mock_sleep):
     """With custom buckets, each session can be called independently without triggering rate limiting"""
@@ -104,10 +105,11 @@ def test_custom_bucket(mock_sleep):
     for _ in range(5):
         session_a.get(MOCKED_URL)
         session_b.get(MOCKED_URL)
-    assert mock_sleep.called is False    
+    assert mock_sleep.called is False
 
-    session_a.get(MOCKED_URL)    
+    session_a.get(MOCKED_URL)
     assert mock_sleep.called is True
+
 
 @patch_sleep
 def test_429(mock_sleep):

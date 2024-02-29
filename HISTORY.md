@@ -1,5 +1,11 @@
 # History
 
+## 0.6.0 (2024-02-29)
+* Add `bucket` param to specify bucket name when not using per-host rate limiting
+
+## 0.5.1 (2023-01-29)
+* Fix simplifying fractional rate below specified interval
+
 ## 0.5.0 (2023-01-29)
 * Add support for floating point values for rate limits
 
