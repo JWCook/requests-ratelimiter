@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "requests-ratelimiter"
-version = "0.6.0"
+version = "0.6.1"
 description = "Rate-limiting for the requests library"
 authors = ["Jordan Cook"]
 license = "MIT"
@@ -48,10 +48,6 @@ requests-cache  = ">=1.1"
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
 
-[tool.black]
-line-length = 100
-skip-string-normalization = true
-
 [tool.coverage.run]
 branch = true
 source = ['requests_ratelimiter']
@@ -62,16 +58,26 @@ directory = 'test-reports'
 [tool.coverage.xml]
 output = 'test-reports/coverage.xml'
 
-[tool.isort]
-profile = 'black'
-line_length = 100
-skip_gitignore = true
-known_first_party = ['tests']
-
 [tool.mypy]
 ignore_missing_imports = true
 
 [tool.ruff]
+fix = true
+unsafe-fixes = true
+line-length = 100
 output-format = 'grouped'
-line-length = 110
-select = ['B', 'C4','C90', 'E', 'F']
+target-version = 'py38'
+
+[tool.ruff.format]
+quote-style = 'single'
+
+[tool.ruff.lint]
+select = ['B', 'C4', 'C90', 'E', 'F']
+ignore = ['B023']
+
+[tool.ruff.lint.isort]
+known-first-party = ['test']
+
+# Wrap lines to 100 chars, but don't error on unwrappable lines until 120 chars
+[tool.ruff.lint.pycodestyle]
+max-line-length = 120

@@ -23,7 +23,7 @@ from requests_cache import CacheMixin
 from requests_ratelimiter import LimiterAdapter, LimiterMixin, LimiterSession
 from requests_ratelimiter.requests_ratelimiter import _convert_rate
 
-patch_sleep = patch("pyrate_limiter.limit_context_decorator.sleep", side_effect=sleep)
+patch_sleep = patch('pyrate_limiter.limit_context_decorator.sleep', side_effect=sleep)
 rate = RequestRate(5, Duration.SECOND)
 
 
@@ -41,7 +41,7 @@ def test_limiter_session(mock_sleep):
 
 
 @patch_sleep
-@patch.object(HTTPAdapter, "send")
+@patch.object(HTTPAdapter, 'send')
 def test_limiter_adapter(mock_send, mock_sleep):
     # To allow mounting a mock:// URL, we need to patch HTTPAdapter.send()
     # so it doesn't validate the protocol
@@ -52,7 +52,7 @@ def test_limiter_adapter(mock_send, mock_sleep):
 
     session = Session()
     adapter = LimiterAdapter(per_second=5)
-    session.mount("http+mock://", adapter)
+    session.mount('http+mock://', adapter)
 
     for _ in range(5):
         session.get(MOCKED_URL)
@@ -144,7 +144,7 @@ def test_limit_status_disabled(mock_sleep):
 
 
 @pytest.mark.parametrize(
-    "limit, interval, expected_limit, expected_interval",
+    'limit, interval, expected_limit, expected_interval',
     [
         (5, 1, 5, 1),
         (0.5, 1, 1, 2),
@@ -188,7 +188,7 @@ def test_custom_bucket(mock_sleep, tmp_path):
 
     session_a = get_mock_session(
         per_second=5,
-        bucket_name="a",
+        bucket_name='a',
         bucket_class=SQLiteBucket,
         bucket_kwargs={
             'path': ratelimit_path,

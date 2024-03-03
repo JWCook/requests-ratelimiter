@@ -56,8 +56,8 @@ class LimiterMixin(MIXIN_BASE):
         ]
         if rates and not limiter:
             logger.debug(
-                "Creating Limiter with rates:\n%s",
-                "\n".join([f"{r.limit}/{r.interval}s" for r in rates]),
+                'Creating Limiter with rates:\n%s',
+                '\n'.join([f'{r.limit}/{r.interval}s' for r in rates]),
             )
 
         # If using a persistent backend, we don't want to use monotonic time (the default)
@@ -121,7 +121,7 @@ class LimiterMixin(MIXIN_BASE):
         If the server also has an hourly limit, we don't have enough information to know if we've
         exceeded that limit or how long to delay, so we'll keep delaying in 1-minute intervals.
         """
-        logger.info(f"Rate limit exceeded for {request.url}; filling limiter bucket")
+        logger.info(f'Rate limit exceeded for {request.url}; filling limiter bucket')
         bucket = self.limiter.bucket_group[self._bucket_name(request)]
 
         # Determine how many requests we've made within the smallest defined time interval
