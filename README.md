@@ -253,10 +253,16 @@ class CachedLimiterSession(CacheMixin, LimiterMixin, Session):
 
 
 # Optionally use SQLite as both the bucket backend and the cache backend
-session = CachedLimiterSession(per_second=5,
-                               cache_name='cache.db', 
-                               bucket_class=SQLiteBucket,
-                               bucket_kwargs={"path": "cache.db", 'isolation_level': "EXCLUSIVE", 'check_same_thread': False})
+session = CachedLimiterSession(
+    per_second=5,
+    cache_name='cache.db',
+    bucket_class=SQLiteBucket,
+    bucket_kwargs={
+        "path": "cache.db",
+        'isolation_level': "EXCLUSIVE",
+        'check_same_thread': False,
+    },
+)
 ```
 
 This example has an extra benefit: cache hits won't count against your rate limit!

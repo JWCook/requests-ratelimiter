@@ -2,8 +2,8 @@
 General rate-limiting behavior is covered by pyrate-limiter unit tests. These tests should cover
 additional behavior specific to requests-ratelimiter.
 """
-import os
 
+import os
 from test.conftest import (
     MOCKED_URL,
     MOCKED_URL_429,
@@ -19,7 +19,8 @@ import pytest
 from pyrate_limiter import Duration, Limiter, RequestRate, SQLiteBucket
 from requests import Response, Session
 from requests.adapters import HTTPAdapter
-from requests_cache import CacheMixin, SQLiteCache
+from requests_cache import CacheMixin
+
 from requests_ratelimiter import LimiterAdapter, LimiterMixin, LimiterSession
 from requests_ratelimiter.requests_ratelimiter import _convert_rate
 
@@ -160,7 +161,15 @@ def test_convert_rate(limit, interval, expected_limit, expected_interval):
 @patch_sleep
 def test_sqlite_backend(mock_sleep):
     """Check that the SQLite backend works as expected"""
-    session = get_mock_session(per_second=5, bucket_class=SQLiteBucket, bucket_kwargs={"path": "rate_limit.db", 'isolation_level': "EXCLUSIVE", 'check_same_thread': False})
+    session = get_mock_session(
+        per_second=5,
+        bucket_class=SQLiteBucket,
+        bucket_kwargs={
+            "path": "rate_limit.db",
+            'isolation_level': "EXCLUSIVE",
+            'check_same_thread': False,
+        },
+    )
 
     for _ in range(5):
         session.get(MOCKED_URL)
