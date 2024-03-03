@@ -43,6 +43,11 @@ The simplest option is
 which can be used as a drop-in replacement for
 [`requests.Session`](https://requests.readthedocs.io/en/latest/api/#requests.Session).
 
+Note: By default, each session will perform rate limiting independently. If you are using a multi-threaded environment
+or multiple processes, you should use a persistent backend like SQLite or Redis which can persist the rate limit across
+threads, processes, and/or application restarts. When using `requests-ratelimiter` as part of a web application, it is
+recommended to use a persistent backend to ensure that the rate limit is shared across all requests.
+
 Example:
 ```python
 from requests_ratelimiter import LimiterSession
@@ -236,22 +241,22 @@ For example, to combine with [requests-cache](https://github.com/requests-cache/
 also includes a separate mixin class:
 ```python
 from requests import Session
-from requests_cache import CacheMixin, RedisCache
-from requests_ratelimiter import LimiterMixin, RedisBucket
+from requests_cache import CacheMixin
+from requests_ratelimiter import LimiterMixin, SQLiteBucket
 
 
 class CachedLimiterSession(CacheMixin, LimiterMixin, Session):
-    """Session class with caching and rate-limiting behavior. Accepts arguments for both
+    """
+    Session class with caching and rate-limiting behavior. Accepts arguments for both
     LimiterSession and CachedSession.
     """
 
 
-# Optionally use Redis as both the bucket backend and the cache backend
-session = CachedLimiterSession(
-    per_second=5,
-    bucket_class=RedisBucket,
-    backend=RedisCache(),
-)
+# Optionally use SQLite as both the bucket backend and the cache backend
+session = CachedLimiterSession(per_second=5,
+                               cache_name='cache.db', 
+                               bucket_class=SQLiteBucket,
+                               bucket_kwargs={"path": "cache.db", 'isolation_level': "EXCLUSIVE", 'check_same_thread': False})
 ```
 
 This example has an extra benefit: cache hits won't count against your rate limit!
