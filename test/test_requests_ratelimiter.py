@@ -3,7 +3,6 @@ General rate-limiting behavior is covered by pyrate-limiter unit tests. These te
 additional behavior specific to requests-ratelimiter.
 """
 
-import os
 from test.conftest import (
     MOCKED_URL,
     MOCKED_URL_429,
@@ -97,6 +96,7 @@ def test_custom_session(mock_sleep):
     session.get(MOCKED_URL)
     assert mock_sleep.called is True
 
+
 @patch_sleep
 def test_429(mock_sleep):
     """After receiving a 429 response, the bucket should be filled, allowing no more requests"""
@@ -159,14 +159,14 @@ def test_convert_rate(limit, interval, expected_limit, expected_interval):
 
 
 @patch_sleep
-def test_sqlite_backend(mock_sleep):
+def test_sqlite_backend(mock_sleep, tmp_path):
     """Check that the SQLite backend works as expected"""
     session = get_mock_session(
         per_second=5,
         bucket_class=SQLiteBucket,
         bucket_kwargs={
-            "path": "rate_limit.db",
-            'isolation_level': "EXCLUSIVE",
+            'path': tmp_path / 'rate_limit.db',
+            'isolation_level': 'EXCLUSIVE',
             'check_same_thread': False,
         },
     )
@@ -178,16 +178,34 @@ def test_sqlite_backend(mock_sleep):
     session.get(MOCKED_URL)
     assert mock_sleep.called is True
 
-    # force the database to close & clean up
-    del session
-    os.remove("rate_limit.db")
-
 
 @patch_sleep
-def test_custom_bucket(mock_sleep):
-    """With custom buckets, each session can be called independently without triggering rate limiting but requires a common backend such as sqlite"""
-    session_a = get_mock_session(per_second=5, bucket_name="a", bucket_class=SQLiteBucket, bucket_kwargs={"path": "rate_limit.db", 'isolation_level': "EXCLUSIVE", 'check_same_thread': False})
-    session_b = get_mock_session(per_second=5, bucket_name="b", bucket_class=SQLiteBucket, bucket_kwargs={"path": "rate_limit.db", 'isolation_level': "EXCLUSIVE", 'check_same_thread': False})
+def test_custom_bucket(mock_sleep, tmp_path):
+    """With custom buckets, each session can be called independently without triggering rate
+    limiting but requires a common backend such as sqlite
+    """
+    ratelimit_path = tmp_path / 'rate_limit.db'
+
+    session_a = get_mock_session(
+        per_second=5,
+        bucket_name="a",
+        bucket_class=SQLiteBucket,
+        bucket_kwargs={
+            'path': ratelimit_path,
+            'isolation_level': 'EXCLUSIVE',
+            'check_same_thread': False,
+        },
+    )
+    session_b = get_mock_session(
+        per_second=5,
+        bucket_name='b',
+        bucket_class=SQLiteBucket,
+        bucket_kwargs={
+            'path': ratelimit_path,
+            'isolation_level': 'EXCLUSIVE',
+            'check_same_thread': False,
+        },
+    )
 
     for _ in range(5):
         session_a.get(MOCKED_URL)
@@ -197,14 +215,9 @@ def test_custom_bucket(mock_sleep):
     session_a.get(MOCKED_URL)
     assert mock_sleep.called is True
 
-    # force the database to close & clean up
-    del session_a
-    del session_b
-    os.remove("rate_limit.db")
-
 
 @patch_sleep
-def test_caching(mock_sleep):
+def test_cache_with_limiter(mock_sleep, tmp_path_factory):
     """Check that caching integration works as expected"""
 
     class CachedLimiterSession(CacheMixin, LimiterMixin, Session):
@@ -213,16 +226,21 @@ def test_caching(mock_sleep):
         LimiterSession and CachedSession.
         """
 
-    session = CachedLimiterSession(per_second=5, cache_name='cache.db', bucket_class=SQLiteBucket, bucket_kwargs={"path": "cache.db", 'isolation_level': "EXCLUSIVE", 'check_same_thread': False})
+    cache_path = tmp_path_factory.mktemp('pytest') / 'cache.db'
+    ratelimit_path = tmp_path_factory.mktemp('pytest') / 'rate_limit.db'
+
+    session = CachedLimiterSession(
+        per_second=5,
+        cache_name=str(cache_path),
+        bucket_class=SQLiteBucket,
+        bucket_kwargs={
+            'path': str(ratelimit_path),
+            'isolation_level': 'EXCLUSIVE',
+            'check_same_thread': False,
+        },
+    )
     session = mount_mock_adapter(session)
 
     for _ in range(10):
         session.get(MOCKED_URL)
     assert mock_sleep.called is False
-
-
-    # force the database to close & clean up
-    del session
-    os.remove("cache.db")
-
-
