@@ -1,5 +1,8 @@
 # History
 
+## 0.7.0 (2024-07-02)
+* Add pickling support for `LimiterSession`
+
 ## 0.6.0 (2024-02-29)
 * Add `bucket` param to specify bucket name when not using per-host rate limiting
 
