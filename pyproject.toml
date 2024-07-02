@@ -43,6 +43,11 @@ pytest-cov      = ">=4.0"
 pytest-xdist    = ">=3.1"
 requests-mock   = ">=1.11"
 requests-cache  = ">=1.1"
+# Workaround for execnet 2.1 not working on python 3.7 and missing package metadata
+execnet = [
+    {python = "3.7", version = ">=2.0,<2.1"},
+    {python = ">=3.8", version = ">=2.0"}
+]
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
