@@ -168,14 +168,14 @@ class LimiterSession(LimiterMixin, Session):
         per_host: Track request rate limits separately for each host
         limit_statuses: Alternative HTTP status codes that indicate a rate limit was exceeded
     """
-    
+
     __attrs__ = Session.__attrs__ + [
         'limiter',
         'limit_statuses',
         'max_delay',
         'per_host',
         'bucket_name',
-        '_default_bucket'
+        '_default_bucket',
     ]
 
 

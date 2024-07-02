@@ -264,7 +264,7 @@ def test_pickling_and_unpickling():
     assert pickled_session is not None
     unpickled_session = pickle.loads(pickled_session)
     assert unpickled_session is not None
-    
+
     # Check that the unpickled instance has the same attributes
     assert unpickled_session.per_host == session.per_host
     assert unpickled_session.max_delay == session.max_delay
