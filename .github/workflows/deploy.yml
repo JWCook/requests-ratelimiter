@@ -13,8 +13,6 @@ on:
         description: 'Version number for pre-releases; defaults to build number'
         required: false
         default: ''
-env:
-  LATEST_PY_VERSION: '3.11'
 
 jobs:
   # Deploy stable builds on tags only, and pre-release builds from manual trigger ("workflow_dispatch")
@@ -24,10 +22,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: ${{ env.LATEST_PY_VERSION }}
+          python-version: 3.12
       - uses: snok/install-poetry@v1.3
         with:
-          version: 1.5.1  # For python 3.7 compatibility
           virtualenvs-in-project: true
 
       - name: Set pre-release version
@@ -39,7 +36,7 @@ jobs:
           poetry version $(poetry version -s).${{ env.pre-release-suffix }}${{ env.pre-release-version }}
           poetry version
 
-      - name: Build and publish to pypi
-        run: |
-          poetry build
-          poetry publish -u  __token__ -p ${{ secrets.PYPI_TOKEN }}
+      - name: Build package distributions
+        run: poetry build
+      - name: Publish package distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
