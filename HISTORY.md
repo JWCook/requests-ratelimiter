@@ -1,5 +1,8 @@
 # History
 
+## 0.8.0 (Unreleased)
+* ⚠️ Drop support for python 3.7
+
 ## 0.7.0 (2024-07-02)
 * Add pickling support for `LimiterSession`
 
