@@ -36,13 +36,13 @@ docs = ["furo", "myst-parser", "sphinx", "sphinx-autodoc-typehints",
         "sphinx-copybutton", "sphinxcontrib-apidoc"]
 
 [tool.poetry.dev-dependencies]
-coverage        = "^7.2"
-pre-commit      = "^3.0"
-pytest          = "^8.0"
+coverage        = "^7.6"
+pre-commit      = ">=3.0"
+pytest          = ">=8.3"
 pytest-cov      = ">=4.0"
 pytest-xdist    = ">=3.1"
 requests-mock   = ">=1.11"
-requests-cache  = ">=1.1"
+requests-cache  = ">=1.2"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
