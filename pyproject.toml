@@ -24,18 +24,7 @@ python          = "^3.8"
 pyrate-limiter  = "<3.0"
 requests        = ">=2.20"
 
-# Documentation dependencies needed for Readthedocs builds
-furo                     = {optional=true, python=">=3.9", version="^2024.7"}
-myst-parser              = {optional=true, python=">=3.9", version=">=3.0"}
-sphinx                   = {optional=true, python=">=3.9", version="^7.4"}
-sphinx-autodoc-typehints = {optional=true, python=">=3.9", version=">2.0"}
-sphinx-copybutton        = {optional=true, python=">=3.9", version=">=0.5"}
-
-[tool.poetry.extras]
-docs = ["furo", "myst-parser", "sphinx", "sphinx-autodoc-typehints",
-        "sphinx-copybutton", "sphinxcontrib-apidoc"]
-
-[tool.poetry.dev-dependencies]
+[tool.poetry.group.dev.dependencies]
 coverage        = "^7.6"
 pre-commit      = ">=3.0"
 pytest          = ">=8.3"
@@ -43,6 +32,14 @@ pytest-cov      = ">=4.0"
 pytest-xdist    = ">=3.1"
 requests-mock   = ">=1.11"
 requests-cache  = ">=1.2"
+
+# Documentation dependencies needed for Readthedocs builds
+[tool.poetry.group.docs.dependencies]
+furo                     = {python=">=3.9", version="^2024.7"}
+myst-parser              = {python=">=3.9", version=">=3.0"}
+sphinx                   = {python=">=3.9", version="^7.4"}
+sphinx-autodoc-typehints = {python=">=3.9", version=">2.0"}
+sphinx-copybutton        = {python=">=3.9", version=">=0.5"}
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
