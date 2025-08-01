@@ -21,7 +21,7 @@ include = [
 
 [tool.poetry.dependencies]
 python          = "^3.8"
-pyrate-limiter  = "<3.0"
+pyrate-limiter  = "<4.0"
 requests        = ">=2.20"
 
 [tool.poetry.group.dev.dependencies]
