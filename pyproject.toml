@@ -35,7 +35,7 @@ requests-cache  = ">=1.2"
 
 # Documentation dependencies needed for Readthedocs builds
 [tool.poetry.group.docs.dependencies]
-furo                     = {python=">=3.9", version="^2024.7"}
+furo                     = {python=">=3.9", version=">=2024.7,<2026.0"}
 myst-parser              = {python=">=3.9", version=">=3.0"}
 sphinx                   = {python=">=3.9", version="^7.4"}
 sphinx-autodoc-typehints = {python=">=3.9", version=">2.0"}
