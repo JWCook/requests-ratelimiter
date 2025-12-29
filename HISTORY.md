@@ -2,6 +2,7 @@
 
 ## 0.8.0 (Unreleased)
 * ⚠️ Drop support for python 3.7
+* Convert packaging and project config to uv. This only affects development tasks, and does not library usage.
 
 ## 0.7.0 (2024-07-02)
 * Add pickling support for `LimiterSession`

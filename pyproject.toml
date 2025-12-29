@@ -1,49 +1,56 @@
-[tool.poetry]
-name = "requests-ratelimiter"
-version = "0.8.0"
-description = "Rate-limiting for the requests library"
-authors = ["Jordan Cook"]
-license = "MIT"
-readme = "README.md"
-homepage = "https://github.com/JWCook/requests-ratelimiter"
-repository = "https://github.com/JWCook/requests-ratelimiter"
-documentation = "https://requests-ratelimiter.readthedocs.io"
-keywords = ["requests", "rate-limiting", "leaky-bucket"]
+[project]
+name = 'requests-ratelimiter'
+version = '0.8.0'
+description = 'Rate-limiting for the requests library'
+authors = [{name = 'Jordan Cook'}]
+license = 'MIT'
+readme = 'README.md'
+keywords = ['requests', 'rate-limiting', 'leaky-bucket']
 classifiers = [
-    "Development Status :: 4 - Beta",
-    "Intended Audience :: Developers",
-    "Typing :: Typed",
+    'Development Status :: 4 - Beta',
+    'Intended Audience :: Developers',
+    'Typing :: Typed',
 ]
-include = [
-    {format="sdist", path="*.md"},
-    {format="sdist", path="test"},
+requires-python = '>=3.8'
+dependencies = [
+    'pyrate-limiter <3.0',
+    'requests       >=2.20',
 ]
 
-[tool.poetry.dependencies]
-python          = "^3.8"
-pyrate-limiter  = "<3.0"
-requests        = ">=2.20"
+[project.urls]
+homepage = 'https://github.com/JWCook/requests-ratelimiter'
+repository = 'https://github.com/JWCook/requests-ratelimiter'
+documentation = 'https://requests-ratelimiter.readthedocs.io'
 
-[tool.poetry.group.dev.dependencies]
-coverage        = "^7.6"
-pre-commit      = ">=3.0"
-pytest          = ">=8.3"
-pytest-cov      = ">=4.0"
-pytest-xdist    = ">=3.1"
-requests-mock   = ">=1.11"
-requests-cache  = ">=1.2"
 
-# Documentation dependencies needed for Readthedocs builds
-[tool.poetry.group.docs.dependencies]
-furo                     = {python=">=3.9", version="^2024.7"}
-myst-parser              = {python=">=3.9", version=">=3.0"}
-sphinx                   = {python=">=3.9", version="^7.4"}
-sphinx-autodoc-typehints = {python=">=3.9", version=">2.0"}
-sphinx-copybutton        = {python=">=3.9", version=">=0.5"}
+[dependency-groups]
+dev = [
+    'coverage       >=7.6',
+    'pre-commit     >=3.0',
+    'pytest         >=8.3',
+    'pytest-cov     >=4.0',
+    'pytest-xdist   >=3.1',
+    'requests-mock  >=1.11',
+    'requests-cache >=1.2',
+]
+docs = [
+    'furo                       >=2024.7; python_version>="3.9"',
+    'myst-parser                >=3.0; python_version>="3.9"',
+    'sphinx                     >=7.4; python_version>="3.9"',
+    'sphinx-autodoc-typehints   >2.0; python_version>="3.9"',
+    'sphinx-copybutton          >=0.5; python_version>="3.9"',
+]
 
 [build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ['hatchling']
+build-backend = 'hatchling.build'
+
+[tool.hatch.build.targets.sdist]
+include = [
+    '/requests_ratelimiter',
+    '/test',
+    '/README.md',
+]
 
 [tool.coverage.run]
 branch = true
