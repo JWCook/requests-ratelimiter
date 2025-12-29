@@ -8,7 +8,7 @@ on:
     branches: [main]
   workflow_dispatch:
 env:
-  LATEST_PY_VERSION: '3.13'
+  LATEST_PY_VERSION: '3.14'
   COVERAGE_ARGS: '--cov --cov-report=term --cov-report=xml'
   XDIST_ARGS: '--numprocesses=auto'
 
@@ -19,32 +19,23 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.8', '3.9', '3.10', '3.11', '3.12', '3.13']
+        python-version: ['3.14', '3.13', '3.12', '3.11', '3.10', '3.9', '3.8']
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      # Install dependencies, with caching
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
         with:
-          python-version: ${{ matrix.python-version }}
-      - uses: snok/install-poetry@v1.4
-        with:
-          version: 1.8.5  # For python 3.88 compatibility
-          virtualenvs-in-project: true
-
-      # Cache packages per python version, and reuse until lockfile changes
-      - name: Cache python packages
-        id: cache
-        uses: actions/cache@v4
-        with:
-          path: .venv
-          key: venv-${{ matrix.python-version }}-${{ hashFiles('poetry.lock') }}
+          enable-cache: true
+          cache-dependency-glob: uv.lock
       - name: Install dependencies
-        if: steps.cache.outputs.cache-hit != 'true'
-        run: poetry install -v
+        run: |
+          uv python install ${{ matrix.python-version }}
+          uv sync --all-groups
 
       # Run tests with coverage report
       - name: Run tests
-        run: poetry run pytest -rs -vv ${{ env.XDIST_ARGS }} ${{ env.COVERAGE_ARGS }}
+        run: uv run pytest -rs -vv ${{ env.XDIST_ARGS }} ${{ env.COVERAGE_ARGS }}
 
       # Latest python version: send coverage report to codecov
       - name: "Upload coverage report to Codecov"
@@ -55,9 +46,9 @@ jobs:
   analyze:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ env.LATEST_PY_VERSION }}
       - name: Run style checks & linting
-        uses: pre-commit/action@v3.0.1
+        uses: j178/prek-action@91fd7d7cf70ae1dee9f4f44e7dfa5d1073fe6623
