@@ -22,8 +22,8 @@ jobs:
         python-version: ['3.8', '3.9', '3.10', '3.11', '3.12', '3.13']
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
       - uses: snok/install-poetry@v1.4
@@ -34,7 +34,7 @@ jobs:
       # Cache packages per python version, and reuse until lockfile changes
       - name: Cache python packages
         id: cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .venv
           key: venv-${{ matrix.python-version }}-${{ hashFiles('poetry.lock') }}
@@ -55,8 +55,8 @@ jobs:
   analyze:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ env.LATEST_PY_VERSION }}
       - name: Run style checks & linting
