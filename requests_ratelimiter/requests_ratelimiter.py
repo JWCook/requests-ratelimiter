@@ -1,13 +1,14 @@
 from fractions import Fraction
 from inspect import signature
 from logging import getLogger
-from time import time
+from time import time, sleep
 from typing import TYPE_CHECKING, Callable, Dict, Iterable, Optional, Type, Union
 from urllib.parse import urlparse
 from uuid import uuid4
 
-from pyrate_limiter import Duration, Limiter, RequestRate
-from pyrate_limiter.bucket import AbstractBucket, MemoryListBucket, MemoryQueueBucket
+from pyrate_limiter import Duration, Limiter, Rate
+from pyrate_limiter import InMemoryBucket, SQLiteBucket
+from pyrate_limiter.abstracts import AbstractBucket, BucketFactory, RateItem
 from requests import PreparedRequest, Response, Session
 from requests.adapters import HTTPAdapter
 
@@ -16,6 +17,59 @@ if TYPE_CHECKING:
 else:
     MIXIN_BASE = object
 logger = getLogger(__name__)
+
+
+class HostBucketFactory(BucketFactory):
+    """Creates separate buckets for per-host rate limiting"""
+
+    def __init__(
+        self,
+        rates: list[Rate],
+        bucket_class: Type[AbstractBucket] = InMemoryBucket,
+        bucket_init_kwargs: Optional[Dict] = None,
+    ):
+        self.rates = rates
+        self.bucket_class = bucket_class
+        self.bucket_init_kwargs = bucket_init_kwargs or {}
+        self.buckets: Dict[str, AbstractBucket] = {}
+        self.leak_interval = 300  # 300ms leak interval
+
+    def wrap_item(self, name: str, weight: int = 1) -> RateItem:
+        """Create a RateItem with current timestamp from the appropriate bucket's clock"""
+        # Get or create bucket to access its time source
+        temp_item = RateItem(name, 0, weight)
+        bucket = self.get(temp_item)
+        now = bucket.now()
+        return RateItem(name, now, weight=weight)
+
+    def get(self, item: RateItem) -> AbstractBucket:
+        """Get or create a bucket for the given item name"""
+        if item.name not in self.buckets:
+            # Create new bucket for this name
+            bucket = self._create_bucket()
+            self.schedule_leak(bucket)
+            self.buckets[item.name] = bucket
+
+        return self.buckets[item.name]
+
+    def _create_bucket(self) -> AbstractBucket:
+        """Create a new bucket instance with the configured bucket class"""
+        if self.bucket_class == InMemoryBucket:
+            return InMemoryBucket(self.rates)
+        elif self.bucket_class == SQLiteBucket:
+            kwargs = _prepare_sqlite_kwargs(self.bucket_init_kwargs)
+            return SQLiteBucket.init_from_file(rates=self.rates, **kwargs)
+        else:
+            # Generic bucket creation - pass rates as first arg
+            return self.bucket_class(self.rates, **self.bucket_init_kwargs)
+
+    def __getitem__(self, name: str) -> AbstractBucket:
+        """Dict-like access for backward compatibility with _fill_bucket() method"""
+        if name not in self.buckets:
+            # Create bucket on access
+            temp_item = RateItem(name, 0, 1)
+            return self.get(temp_item)
+        return self.buckets[name]
 
 
 class LimiterMixin(MIXIN_BASE):
@@ -32,7 +86,7 @@ class LimiterMixin(MIXIN_BASE):
         per_day: float = 0,
         per_month: float = 0,
         burst: float = 1,
-        bucket_class: Type[AbstractBucket] = MemoryListBucket,
+        bucket_class: Type[AbstractBucket] = InMemoryBucket,
         bucket_kwargs: Optional[Dict] = None,
         time_function: Optional[Callable[..., float]] = None,
         limiter: Optional[Limiter] = None,
@@ -42,34 +96,58 @@ class LimiterMixin(MIXIN_BASE):
         bucket_name: Optional[str] = None,
         **kwargs,
     ):
-        # Translate request rate values into RequestRate objects
+        # Translate request rate values into Rate objects
+        # Duration values are in milliseconds in v4
         rates = [
             _convert_rate(limit, interval)
             for interval, limit in {
-                Duration.SECOND * burst: per_second * burst,
-                Duration.MINUTE: per_minute,
-                Duration.HOUR: per_hour,
-                Duration.DAY: per_day,
-                Duration.MONTH: per_month,
+                int(Duration.SECOND * burst): per_second * burst,
+                int(Duration.MINUTE): per_minute,
+                int(Duration.HOUR): per_hour,
+                int(Duration.DAY): per_day,
+                int(Duration.DAY * 30): per_month,
             }.items()
             if limit
         ]
+
         if rates and not limiter:
             logger.debug(
                 'Creating Limiter with rates:\n%s',
-                '\n'.join([f'{r.limit}/{r.interval}s' for r in rates]),
+                '\n'.join([f'{r.limit}/{r.interval}ms' for r in rates]),
             )
 
-        # If using a persistent backend, we don't want to use monotonic time (the default)
-        if bucket_class not in (MemoryListBucket, MemoryQueueBucket) and not time_function:
-            time_function = time
+        # Compatibility for v2 bucket class names
+        if hasattr(bucket_class, '__name__'):
+            if bucket_class.__name__ in ('MemoryQueueBucket', 'MemoryListBucket'):
+                bucket_class = InMemoryBucket
 
-        self.limiter = limiter or Limiter(
-            *rates,
-            bucket_class=bucket_class,
-            bucket_kwargs=bucket_kwargs,
-            time_function=time_function,
-        )
+        bucket_init_kwargs = bucket_kwargs or {}
+
+        if limiter:
+            self.limiter = limiter
+            self._custom_limiter = True
+        # Per-host mode: need multiple buckets
+        elif per_host and bucket_name is None:
+            factory = HostBucketFactory(
+                rates=rates,
+                bucket_class=bucket_class,
+                bucket_init_kwargs=bucket_init_kwargs,
+            )
+            self.limiter = Limiter(factory, buffer_ms=50)
+            self._custom_limiter = False
+        # Single bucket mode: all requests share one bucket
+        else:
+            if bucket_class == InMemoryBucket:
+                bucket = InMemoryBucket(rates)
+            elif bucket_class == SQLiteBucket:
+                kwargs = _prepare_sqlite_kwargs(bucket_init_kwargs, bucket_name)
+                bucket = SQLiteBucket.init_from_file(rates=rates, **kwargs)
+            else:
+                bucket = bucket_class(rates, **bucket_init_kwargs)
+
+            self.limiter = Limiter(bucket, buffer_ms=50)
+            self._custom_limiter = False
+
         self.limit_statuses = limit_statuses
         self.max_delay = max_delay
         self.per_host = per_host
@@ -85,17 +163,36 @@ class LimiterMixin(MIXIN_BASE):
         """Send a request with rate-limiting.
 
         Raises:
-            :py:exc:`.BucketFullException` if this request would result in a delay longer than ``max_delay``
+            :py:exc:`.RuntimeError` if this request would result in a delay longer than ``max_delay``
         """
-        with self.limiter.ratelimit(
-            self._bucket_name(request),
-            delay=True,
-            max_delay=self.max_delay,
-        ):
-            response = super().send(request, **kwargs)
-            if response.status_code in self.limit_statuses:
-                self._fill_bucket(request)
-            return response
+        bucket_name = self._bucket_name(request)
+
+        # pyrate-limiter v4 no longer supports max_delay; implement by retrying with timeout tracking
+        if self.max_delay is not None:
+            start_time = time()
+
+            while True:
+                acquired = self.limiter.try_acquire(bucket_name, weight=1, blocking=False)
+                if acquired:
+                    break
+
+                # Not acquired - check if we've exceeded max_delay
+                elapsed = time() - start_time
+                if elapsed >= self.max_delay:
+                    raise RuntimeError(
+                        f'Rate limit exceeded. Unable to acquire permit within '
+                        f'max_delay ({self.max_delay}s)'
+                    )
+                sleep(0.05)
+        else:
+            # No max_delay - simple blocking acquire
+            self.limiter.try_acquire(bucket_name, weight=1, blocking=True)
+
+        response = super().send(request, **kwargs)
+        if response.status_code in self.limit_statuses:
+            self._fill_bucket(request)
+
+        return response
 
     def _bucket_name(self, request):
         """Get a bucket name for the given request"""
@@ -122,20 +219,29 @@ class LimiterMixin(MIXIN_BASE):
         exceeded that limit or how long to delay, so we'll keep delaying in 1-minute intervals.
         """
         logger.info(f'Rate limit exceeded for {request.url}; filling limiter bucket')
-        bucket = self.limiter.bucket_group[self._bucket_name(request)]
+        bucket_name = self._bucket_name(request)
 
-        # Determine how many requests we've made within the smallest defined time interval
-        now = self.limiter.time_function()
-        rate = self.limiter._rates[0]
-        item_count, _ = bucket.inspect_expired_items(now - rate.interval)
+        # Access bucket through factory (supports dict-like access) or single bucket mode
+        if hasattr(self.limiter.bucket_factory, '__getitem__'):
+            bucket = self.limiter.bucket_factory[bucket_name]
+        else:
+            buckets = self.limiter.buckets()
+            bucket = buckets[0] if buckets else None
 
-        # TODO: After fixing usage with MemoryQueueBucket on py 3.11, don't add items over capacity
-        # capacity = bucket.maxsize() - bucket.size()
-        # n_filler_requests = min(capacity, rate.limit - item_count)
+        if not bucket:
+            logger.warning('No buckets available to fill')
+            return
 
-        # Add "filler" requests to reach the limit for that interval
-        for _ in range(rate.limit - item_count):
-            bucket.put(now)
+        now = bucket.now()
+
+        # Use smallest rate interval (first after sorting)
+        rate = sorted(bucket.rates, key=lambda r: r.interval)[0]
+
+        # Add filler items to saturate the smallest rate limit
+        # This ensures we delay before the next request
+        for _ in range(rate.limit):
+            filler_item = RateItem(bucket_name, now, weight=1)
+            bucket.put(filler_item)
 
 
 class LimiterSession(LimiterMixin, Session):
@@ -188,13 +294,37 @@ class LimiterAdapter(LimiterMixin, HTTPAdapter):  # type: ignore  # send signatu
     """
 
 
-def _convert_rate(limit: float, interval: float) -> RequestRate:
-    """Handle fractional rate limits by converting to a whole number of requests per interval"""
+def _convert_rate(limit: float, interval: float) -> Rate:
+    """Handle fractional rate limits by converting to a whole number of requests per interval
+
+    Args:
+        limit: Number of requests allowed
+        interval: Time interval in milliseconds (from Duration enum values)
+    """
     fraction = Fraction(limit).limit_denominator(1000)  # adjust for floating point weirdness
-    return RequestRate(fraction.numerator, interval * fraction.denominator)
+    # interval is already in milliseconds from Duration enum values, no conversion needed
+    # Ensure interval is at least 1ms (Rate requires interval > 0)
+    converted_interval = max(1, int(interval * fraction.denominator))
+    return Rate(fraction.numerator, converted_interval)
 
 
 def _get_valid_kwargs(func: Callable, kwargs: Dict) -> Dict:
     """Get the subset of non-None ``kwargs`` that are valid params for ``func``"""
     sig_params = list(signature(func).parameters)
     return {k: v for k, v in kwargs.items() if k in sig_params and v is not None}
+
+
+def _prepare_sqlite_kwargs(bucket_kwargs: Dict, bucket_name: Optional[str] = None) -> Dict:
+    """Prepare SQLiteBucket kwargs for v4 compatibility"""
+    kwargs = bucket_kwargs.copy()
+    if 'path' in kwargs:
+        kwargs['db_path'] = str(kwargs.pop('path'))
+
+    # If bucket_name is specified, use it as the table name to ensure separation
+    # This allows multiple sessions with different bucket_names to share a db file
+    if bucket_name and 'table' not in kwargs:
+        kwargs['table'] = f'bucket_{bucket_name}'
+
+    # Filter to only supported parameters for SQLiteBucket.init_from_file
+    supported_params = {'table', 'db_path', 'create_new_table', 'use_file_lock'}
+    return {k: v for k, v in kwargs.items() if k in supported_params}

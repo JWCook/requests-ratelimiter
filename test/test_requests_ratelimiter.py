@@ -3,6 +3,18 @@ General rate-limiting behavior is covered by pyrate-limiter unit tests. These te
 additional behavior specific to requests-ratelimiter.
 """
 
+import pickle
+from time import sleep
+from unittest.mock import patch
+
+import pytest
+from pyrate_limiter import Duration, InMemoryBucket, Limiter, Rate, SQLiteBucket
+from requests import Response, Session
+from requests.adapters import HTTPAdapter
+from requests_cache import CacheMixin
+
+from requests_ratelimiter import LimiterAdapter, LimiterMixin, LimiterSession
+from requests_ratelimiter.requests_ratelimiter import _convert_rate
 from test.conftest import (
     MOCKED_URL,
     MOCKED_URL_429,
@@ -11,22 +23,9 @@ from test.conftest import (
     get_mock_session,
     mount_mock_adapter,
 )
-from time import sleep
-from unittest.mock import patch
 
-import pickle
-
-import pytest
-from pyrate_limiter import Duration, Limiter, RequestRate, SQLiteBucket
-from requests import Response, Session
-from requests.adapters import HTTPAdapter
-from requests_cache import CacheMixin
-
-from requests_ratelimiter import LimiterAdapter, LimiterMixin, LimiterSession
-from requests_ratelimiter.requests_ratelimiter import _convert_rate
-
-patch_sleep = patch('pyrate_limiter.limit_context_decorator.sleep', side_effect=sleep)
-rate = RequestRate(5, Duration.SECOND)
+patch_sleep = patch('pyrate_limiter.limiter.sleep', side_effect=sleep)
+rate = Rate(5, Duration.SECOND)
 
 
 @patch_sleep
@@ -66,7 +65,8 @@ def test_limiter_adapter(mock_send, mock_sleep):
 
 @patch_sleep
 def test_custom_limiter(mock_sleep):
-    limiter = Limiter(RequestRate(5, Duration.SECOND))
+    bucket = InMemoryBucket([Rate(5, Duration.SECOND)])
+    limiter = Limiter(bucket)
     session = get_mock_session(limiter=limiter)
 
     for _ in range(5):
