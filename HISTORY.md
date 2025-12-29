@@ -1,6 +1,6 @@
 # History
 
-## 0.8.0 (Unreleased)
+## 0.8.0 (2026-01-03)
 * ⚠️ Drop support for python 3.7
 * Convert packaging and project config to uv. This only affects development tasks, and does not library usage.
 
