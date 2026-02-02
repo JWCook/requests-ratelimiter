@@ -1,13 +1,12 @@
 from fractions import Fraction
 from inspect import signature
 from logging import getLogger
-from time import time, sleep
+from time import sleep, time
 from typing import TYPE_CHECKING, Callable, Dict, Iterable, Optional, Type, Union
 from urllib.parse import urlparse
 from uuid import uuid4
 
-from pyrate_limiter import Duration, Limiter, Rate
-from pyrate_limiter import InMemoryBucket, SQLiteBucket
+from pyrate_limiter import Duration, InMemoryBucket, Limiter, Rate, SQLiteBucket
 from pyrate_limiter.abstracts import AbstractBucket, BucketFactory, RateItem
 from requests import PreparedRequest, Response, Session
 from requests.adapters import HTTPAdapter
@@ -301,11 +300,18 @@ def _convert_rate(limit: float, interval: float) -> Rate:
         limit: Number of requests allowed
         interval: Time interval in milliseconds (from Duration enum values)
     """
-    fraction = Fraction(limit).limit_denominator(1000)  # adjust for floating point weirdness
-    # interval is already in milliseconds from Duration enum values, no conversion needed
+    limit_fraction = Fraction(limit).limit_denominator(1000)
+    converted_limit = limit_fraction.numerator
+    converted_interval = interval * limit_fraction.denominator
+
+    # Handle fractional intervals (Rate requires integer interval): e.g., 1 req/0.5ms -> 2 req/1ms
+    if converted_interval < 1:
+        interval_fraction = Fraction(converted_interval).limit_denominator(1000)
+        converted_limit = converted_limit * interval_fraction.denominator
+        converted_interval = converted_interval * interval_fraction.denominator
+
     # Ensure interval is at least 1ms (Rate requires interval > 0)
-    converted_interval = max(1, int(interval * fraction.denominator))
-    return Rate(fraction.numerator, converted_interval)
+    return Rate(converted_limit, max(1, int(converted_interval)))
 
 
 def _get_valid_kwargs(func: Callable, kwargs: Dict) -> Dict:
