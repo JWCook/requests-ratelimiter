@@ -6,69 +6,18 @@ from typing import TYPE_CHECKING, Callable, Dict, Iterable, Optional, Type, Unio
 from urllib.parse import urlparse
 from uuid import uuid4
 
-from pyrate_limiter import Duration, InMemoryBucket, Limiter, Rate, SQLiteBucket
-from pyrate_limiter.abstracts import AbstractBucket, BucketFactory, RateItem
+from pyrate_limiter import Duration, InMemoryBucket, Limiter, Rate
+from pyrate_limiter.abstracts import AbstractBucket, RateItem
 from requests import PreparedRequest, Response, Session
 from requests.adapters import HTTPAdapter
+
+from .buckets import HostBucketFactory
 
 if TYPE_CHECKING:
     MIXIN_BASE = Session
 else:
     MIXIN_BASE = object
 logger = getLogger(__name__)
-
-
-class HostBucketFactory(BucketFactory):
-    """Creates separate buckets for per-host rate limiting"""
-
-    def __init__(
-        self,
-        rates: list[Rate],
-        bucket_class: Type[AbstractBucket] = InMemoryBucket,
-        bucket_init_kwargs: Optional[Dict] = None,
-    ):
-        self.rates = rates
-        self.bucket_class = bucket_class
-        self.bucket_init_kwargs = bucket_init_kwargs or {}
-        self.buckets: Dict[str, AbstractBucket] = {}
-        self.leak_interval = 300  # 300ms leak interval
-
-    def wrap_item(self, name: str, weight: int = 1) -> RateItem:
-        """Create a RateItem with current timestamp from the appropriate bucket's clock"""
-        # Get or create bucket to access its time source
-        temp_item = RateItem(name, 0, weight)
-        bucket = self.get(temp_item)
-        now = bucket.now()
-        return RateItem(name, now, weight=weight)
-
-    def get(self, item: RateItem) -> AbstractBucket:
-        """Get or create a bucket for the given item name"""
-        if item.name not in self.buckets:
-            # Create new bucket for this name
-            bucket = self._create_bucket()
-            self.schedule_leak(bucket)
-            self.buckets[item.name] = bucket
-
-        return self.buckets[item.name]
-
-    def _create_bucket(self) -> AbstractBucket:
-        """Create a new bucket instance with the configured bucket class"""
-        if self.bucket_class == InMemoryBucket:
-            return InMemoryBucket(self.rates)
-        elif self.bucket_class == SQLiteBucket:
-            kwargs = _prepare_sqlite_kwargs(self.bucket_init_kwargs)
-            return SQLiteBucket.init_from_file(rates=self.rates, **kwargs)
-        else:
-            # Generic bucket creation - pass rates as first arg
-            return self.bucket_class(self.rates, **self.bucket_init_kwargs)
-
-    def __getitem__(self, name: str) -> AbstractBucket:
-        """Dict-like access for backward compatibility with _fill_bucket() method"""
-        if name not in self.buckets:
-            # Create bucket on access
-            temp_item = RateItem(name, 0, 1)
-            return self.get(temp_item)
-        return self.buckets[name]
 
 
 class LimiterMixin(MIXIN_BASE):
@@ -95,8 +44,7 @@ class LimiterMixin(MIXIN_BASE):
         bucket_name: Optional[str] = None,
         **kwargs,
     ):
-        # Translate request rate values into Rate objects
-        # Duration values are in milliseconds in v4
+        # Translate request rate values into Rate objects (using millisecond intervals)
         rates = [
             _convert_rate(limit, interval)
             for interval, limit in {
@@ -115,36 +63,19 @@ class LimiterMixin(MIXIN_BASE):
                 '\n'.join([f'{r.limit}/{r.interval}ms' for r in rates]),
             )
 
-        # Compatibility for v2 bucket class names
-        if hasattr(bucket_class, '__name__'):
-            if bucket_class.__name__ in ('MemoryQueueBucket', 'MemoryListBucket'):
-                bucket_class = InMemoryBucket
-
-        bucket_init_kwargs = bucket_kwargs or {}
+        bucket_kwargs = bucket_kwargs or {}
 
         if limiter:
             self.limiter = limiter
             self._custom_limiter = True
-        # Per-host mode: need multiple buckets
-        elif per_host and bucket_name is None:
+        else:
             factory = HostBucketFactory(
                 rates=rates,
                 bucket_class=bucket_class,
-                bucket_init_kwargs=bucket_init_kwargs,
+                bucket_init_kwargs=bucket_kwargs,
+                bucket_name=bucket_name,
             )
             self.limiter = Limiter(factory, buffer_ms=50)
-            self._custom_limiter = False
-        # Single bucket mode: all requests share one bucket
-        else:
-            if bucket_class == InMemoryBucket:
-                bucket = InMemoryBucket(rates)
-            elif bucket_class == SQLiteBucket:
-                kwargs = _prepare_sqlite_kwargs(bucket_init_kwargs, bucket_name)
-                bucket = SQLiteBucket.init_from_file(rates=rates, **kwargs)
-            else:
-                bucket = bucket_class(rates, **bucket_init_kwargs)
-
-            self.limiter = Limiter(bucket, buffer_ms=50)
             self._custom_limiter = False
 
         self.limit_statuses = limit_statuses
@@ -167,6 +98,7 @@ class LimiterMixin(MIXIN_BASE):
         bucket_name = self._bucket_name(request)
 
         # pyrate-limiter v4 no longer supports max_delay; implement by retrying with timeout tracking
+        # TODO: I really don't love this busy-wait loop; consider adding bucket-level support upstream
         if self.max_delay is not None:
             start_time = time()
 
@@ -318,19 +250,3 @@ def _get_valid_kwargs(func: Callable, kwargs: Dict) -> Dict:
     """Get the subset of non-None ``kwargs`` that are valid params for ``func``"""
     sig_params = list(signature(func).parameters)
     return {k: v for k, v in kwargs.items() if k in sig_params and v is not None}
-
-
-def _prepare_sqlite_kwargs(bucket_kwargs: Dict, bucket_name: Optional[str] = None) -> Dict:
-    """Prepare SQLiteBucket kwargs for v4 compatibility"""
-    kwargs = bucket_kwargs.copy()
-    if 'path' in kwargs:
-        kwargs['db_path'] = str(kwargs.pop('path'))
-
-    # If bucket_name is specified, use it as the table name to ensure separation
-    # This allows multiple sessions with different bucket_names to share a db file
-    if bucket_name and 'table' not in kwargs:
-        kwargs['table'] = f'bucket_{bucket_name}'
-
-    # Filter to only supported parameters for SQLiteBucket.init_from_file
-    supported_params = {'table', 'db_path', 'create_new_table', 'use_file_lock'}
-    return {k: v for k, v in kwargs.items() if k in supported_params}
