@@ -88,6 +88,39 @@ class LimiterMixin(MIXIN_BASE):
         session_kwargs = _get_valid_kwargs(super().__init__, kwargs)
         super().__init__(**session_kwargs)  # type: ignore  # Base Session doesn't take any kwargs
 
+    def __getstate__(self):
+        """Get state for pickling, excluding unpicklable lock objects"""
+        state = self.__dict__.copy()
+        # Handle unpicklable lock from limiter if it exists
+        if hasattr(self, 'limiter') and hasattr(self.limiter, 'lock'):
+            # Store limiter state as a dictionary, excluding unpicklable attributes
+            limiter_dict = self.limiter.__dict__.copy()
+            limiter_dict.pop('lock', None)
+            limiter_dict.pop('_thread_local', None)
+            state['_limiter_state'] = limiter_dict
+            # Remove the original limiter from state
+            del state['limiter']
+        return state
+
+    def __setstate__(self, state):
+        """Restore state after unpickling, recreating lock objects"""
+        self.__dict__.update(state)
+        # Restore limiter from stored state if it was removed for pickling
+        if '_limiter_state' in state:
+            # Recreate the limiter with a new lock
+            from pyrate_limiter import Limiter
+
+            # Get the bucket factory from the stored state
+            bucket_factory = state['_limiter_state']['bucket_factory']
+            buffer_ms = state['_limiter_state']['buffer_ms']
+
+            # Create a new limiter with the same configuration
+            self.limiter = Limiter(bucket_factory, buffer_ms=buffer_ms)
+
+            # Clean up the temporary state
+            if hasattr(self, '_limiter_state'):
+                delattr(self, '_limiter_state')
+
     # Conveniently, both Session.send() and HTTPAdapter.send() have a mostly consistent signature
     def send(self, request: PreparedRequest, **kwargs) -> Response:
         """Send a request with rate-limiting.
