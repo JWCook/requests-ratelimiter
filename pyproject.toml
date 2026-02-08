@@ -34,11 +34,11 @@ dev = [
     'requests-cache >=1.2',
 ]
 docs = [
-    'furo                       >=2024.7; python_version>="3.9"',
-    'myst-parser                >=3.0; python_version>="3.9"',
-    'sphinx                     >=7.4; python_version>="3.9"',
-    'sphinx-autodoc-typehints   >2.0; python_version>="3.9"',
-    'sphinx-copybutton          >=0.5; python_version>="3.9"',
+    'furo                       >=2025.12',
+    'myst-parser                >=3.0',
+    'sphinx                     >=7.0',
+    'sphinx-autodoc-typehints   >=2.5',
+    'sphinx-copybutton          >=0.5',
 ]
 
 [build-system]
