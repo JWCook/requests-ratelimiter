@@ -1,15 +1,17 @@
 from fractions import Fraction
 from inspect import signature
 from logging import getLogger
-from time import time
+from time import sleep, time
 from typing import TYPE_CHECKING, Callable, Dict, Iterable, Optional, Type, Union
 from urllib.parse import urlparse
 from uuid import uuid4
 
-from pyrate_limiter import Duration, Limiter, RequestRate
-from pyrate_limiter.bucket import AbstractBucket, MemoryListBucket, MemoryQueueBucket
+from pyrate_limiter import Duration, InMemoryBucket, Limiter, Rate
+from pyrate_limiter.abstracts import AbstractBucket, RateItem
 from requests import PreparedRequest, Response, Session
 from requests.adapters import HTTPAdapter
+
+from .buckets import HostBucketFactory
 
 if TYPE_CHECKING:
     MIXIN_BASE = Session
@@ -32,7 +34,7 @@ class LimiterMixin(MIXIN_BASE):
         per_day: float = 0,
         per_month: float = 0,
         burst: float = 1,
-        bucket_class: Type[AbstractBucket] = MemoryListBucket,
+        bucket_class: Type[AbstractBucket] = InMemoryBucket,
         bucket_kwargs: Optional[Dict] = None,
         time_function: Optional[Callable[..., float]] = None,
         limiter: Optional[Limiter] = None,
@@ -42,34 +44,40 @@ class LimiterMixin(MIXIN_BASE):
         bucket_name: Optional[str] = None,
         **kwargs,
     ):
-        # Translate request rate values into RequestRate objects
+        # Translate request rate values into Rate objects (using millisecond intervals)
         rates = [
             _convert_rate(limit, interval)
             for interval, limit in {
-                Duration.SECOND * burst: per_second * burst,
-                Duration.MINUTE: per_minute,
-                Duration.HOUR: per_hour,
-                Duration.DAY: per_day,
-                Duration.MONTH: per_month,
+                int(Duration.SECOND * burst): per_second * burst,
+                int(Duration.MINUTE): per_minute,
+                int(Duration.HOUR): per_hour,
+                int(Duration.DAY): per_day,
+                int(Duration.DAY * 30): per_month,
             }.items()
             if limit
         ]
+
         if rates and not limiter:
             logger.debug(
                 'Creating Limiter with rates:\n%s',
-                '\n'.join([f'{r.limit}/{r.interval}s' for r in rates]),
+                '\n'.join([f'{r.limit}/{r.interval}ms' for r in rates]),
             )
 
-        # If using a persistent backend, we don't want to use monotonic time (the default)
-        if bucket_class not in (MemoryListBucket, MemoryQueueBucket) and not time_function:
-            time_function = time
+        bucket_kwargs = bucket_kwargs or {}
 
-        self.limiter = limiter or Limiter(
-            *rates,
-            bucket_class=bucket_class,
-            bucket_kwargs=bucket_kwargs,
-            time_function=time_function,
-        )
+        if limiter:
+            self.limiter = limiter
+            self._custom_limiter = True
+        else:
+            factory = HostBucketFactory(
+                rates=rates,
+                bucket_class=bucket_class,
+                bucket_init_kwargs=bucket_kwargs,
+                bucket_name=bucket_name,
+            )
+            self.limiter = Limiter(factory, buffer_ms=50)
+            self._custom_limiter = False
+
         self.limit_statuses = limit_statuses
         self.max_delay = max_delay
         self.per_host = per_host
@@ -80,22 +88,75 @@ class LimiterMixin(MIXIN_BASE):
         session_kwargs = _get_valid_kwargs(super().__init__, kwargs)
         super().__init__(**session_kwargs)  # type: ignore  # Base Session doesn't take any kwargs
 
+    def __getstate__(self):
+        """Get state for pickling, excluding unpicklable lock objects"""
+        state = self.__dict__.copy()
+        # Handle unpicklable lock from limiter if it exists
+        if hasattr(self, 'limiter') and hasattr(self.limiter, 'lock'):
+            # Store limiter state as a dictionary, excluding unpicklable attributes
+            limiter_dict = self.limiter.__dict__.copy()
+            limiter_dict.pop('lock', None)
+            limiter_dict.pop('_thread_local', None)
+            state['_limiter_state'] = limiter_dict
+            # Remove the original limiter from state
+            del state['limiter']
+        return state
+
+    def __setstate__(self, state):
+        """Restore state after unpickling, recreating lock objects"""
+        self.__dict__.update(state)
+        # Restore limiter from stored state if it was removed for pickling
+        if '_limiter_state' in state:
+            # Recreate the limiter with a new lock
+            from pyrate_limiter import Limiter
+
+            # Get the bucket factory from the stored state
+            bucket_factory = state['_limiter_state']['bucket_factory']
+            buffer_ms = state['_limiter_state']['buffer_ms']
+
+            # Create a new limiter with the same configuration
+            self.limiter = Limiter(bucket_factory, buffer_ms=buffer_ms)
+
+            # Clean up the temporary state
+            if hasattr(self, '_limiter_state'):
+                delattr(self, '_limiter_state')
+
     # Conveniently, both Session.send() and HTTPAdapter.send() have a mostly consistent signature
     def send(self, request: PreparedRequest, **kwargs) -> Response:
         """Send a request with rate-limiting.
 
         Raises:
-            :py:exc:`.BucketFullException` if this request would result in a delay longer than ``max_delay``
+            :py:exc:`.RuntimeError` if this request would result in a delay longer than ``max_delay``
         """
-        with self.limiter.ratelimit(
-            self._bucket_name(request),
-            delay=True,
-            max_delay=self.max_delay,
-        ):
-            response = super().send(request, **kwargs)
-            if response.status_code in self.limit_statuses:
-                self._fill_bucket(request)
-            return response
+        bucket_name = self._bucket_name(request)
+
+        # pyrate-limiter v4 no longer supports max_delay; implement by retrying with timeout tracking
+        # TODO: I really don't love this busy-wait loop; consider adding bucket-level support upstream
+        if self.max_delay is not None:
+            start_time = time()
+
+            while True:
+                acquired = self.limiter.try_acquire(bucket_name, weight=1, blocking=False)
+                if acquired:
+                    break
+
+                # Not acquired - check if we've exceeded max_delay
+                elapsed = time() - start_time
+                if elapsed >= self.max_delay:
+                    raise RuntimeError(
+                        f'Rate limit exceeded. Unable to acquire permit within '
+                        f'max_delay ({self.max_delay}s)'
+                    )
+                sleep(0.05)
+        else:
+            # No max_delay - simple blocking acquire
+            self.limiter.try_acquire(bucket_name, weight=1, blocking=True)
+
+        response = super().send(request, **kwargs)
+        if response.status_code in self.limit_statuses:
+            self._fill_bucket(request)
+
+        return response
 
     def _bucket_name(self, request):
         """Get a bucket name for the given request"""
@@ -122,20 +183,29 @@ class LimiterMixin(MIXIN_BASE):
         exceeded that limit or how long to delay, so we'll keep delaying in 1-minute intervals.
         """
         logger.info(f'Rate limit exceeded for {request.url}; filling limiter bucket')
-        bucket = self.limiter.bucket_group[self._bucket_name(request)]
+        bucket_name = self._bucket_name(request)
 
-        # Determine how many requests we've made within the smallest defined time interval
-        now = self.limiter.time_function()
-        rate = self.limiter._rates[0]
-        item_count, _ = bucket.inspect_expired_items(now - rate.interval)
+        # Access bucket through factory (supports dict-like access) or single bucket mode
+        if hasattr(self.limiter.bucket_factory, '__getitem__'):
+            bucket = self.limiter.bucket_factory[bucket_name]
+        else:
+            buckets = self.limiter.buckets()
+            bucket = buckets[0] if buckets else None
 
-        # TODO: After fixing usage with MemoryQueueBucket on py 3.11, don't add items over capacity
-        # capacity = bucket.maxsize() - bucket.size()
-        # n_filler_requests = min(capacity, rate.limit - item_count)
+        if not bucket:
+            logger.warning('No buckets available to fill')
+            return
 
-        # Add "filler" requests to reach the limit for that interval
-        for _ in range(rate.limit - item_count):
-            bucket.put(now)
+        now = bucket.now()
+
+        # Use smallest rate interval (first after sorting)
+        rate = sorted(bucket.rates, key=lambda r: r.interval)[0]
+
+        # Add filler items to saturate the smallest rate limit
+        # This ensures we delay before the next request
+        for _ in range(rate.limit):
+            filler_item = RateItem(bucket_name, now, weight=1)
+            bucket.put(filler_item)
 
 
 class LimiterSession(LimiterMixin, Session):
@@ -158,9 +228,9 @@ class LimiterSession(LimiterMixin, Session):
         per_month: Max requests per month
         burst: Max number of consecutive requests allowed before applying per-second rate-limiting
         bucket_class: Bucket backend class; may be one of
-            :py:class:`~pyrate_limiter.bucket.MemoryQueueBucket` (default),
-            :py:class:`~pyrate_limiter.sqlite_bucket.SQLiteBucket`, or
-            :py:class:`~pyrate_limiter.bucket.RedisBucket`
+            :py:class:`~pyrate_limiter.buckets.in_memory_bucket.InMemoryBucket` (default),
+            :py:class:`~pyrate_limiter.buckets.sqlite_bucket.SQLiteBucket`, or
+            :py:class:`~pyrate_limiter.buckets.redis_bucket.RedisBucket`
         bucket_kwargs: Bucket backend keyword arguments
         limiter: An existing Limiter object to use instead of the above params
         max_delay: The maximum allowed delay time (in seconds); anything over this will abort the
@@ -188,10 +258,25 @@ class LimiterAdapter(LimiterMixin, HTTPAdapter):  # type: ignore  # send signatu
     """
 
 
-def _convert_rate(limit: float, interval: float) -> RequestRate:
-    """Handle fractional rate limits by converting to a whole number of requests per interval"""
-    fraction = Fraction(limit).limit_denominator(1000)  # adjust for floating point weirdness
-    return RequestRate(fraction.numerator, interval * fraction.denominator)
+def _convert_rate(limit: float, interval: float) -> Rate:
+    """Handle fractional rate limits by converting to a whole number of requests per interval
+
+    Args:
+        limit: Number of requests allowed
+        interval: Time interval in milliseconds (from Duration enum values)
+    """
+    limit_fraction = Fraction(limit).limit_denominator(1000)
+    converted_limit = limit_fraction.numerator
+    converted_interval = interval * limit_fraction.denominator
+
+    # Handle fractional intervals (Rate requires integer interval): e.g., 1 req/0.5ms -> 2 req/1ms
+    if converted_interval < 1:
+        interval_fraction = Fraction(converted_interval).limit_denominator(1000)
+        converted_limit = converted_limit * interval_fraction.denominator
+        converted_interval = converted_interval * interval_fraction.denominator
+
+    # Ensure interval is at least 1ms (Rate requires interval > 0)
+    return Rate(converted_limit, max(1, int(converted_interval)))
 
 
 def _get_valid_kwargs(func: Callable, kwargs: Dict) -> Dict:

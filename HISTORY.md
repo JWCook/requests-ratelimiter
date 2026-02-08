@@ -1,7 +1,13 @@
 # History
 
+## Unreleased
+* Migrate to pyrate-limiter v4
+* ⚠️ If you are using pyrate-limiter features directly, see its [release notes](https://github.com/vutran1710/PyrateLimiter/blob/master/CHANGELOG.md) for info on breaking changes.
+* ⚠️ Drop support for python 3.8 and 3.9 (required upstream)
+
 ## 0.8.0 (2026-01-03)
 * ⚠️ Drop support for python 3.7
+* Add tests for python 3.13 and 3.14
 * Convert packaging and project config to uv. This only affects development tasks, and does not library usage.
 
 ## 0.7.0 (2024-07-02)

@@ -1,6 +1,6 @@
 [project]
 name = 'requests-ratelimiter'
-version = '0.8.0'
+version = '0.9.0'
 description = 'Rate-limiting for the requests library'
 authors = [{name = 'Jordan Cook'}]
 license = 'MIT'
@@ -11,9 +11,9 @@ classifiers = [
     'Intended Audience :: Developers',
     'Typing :: Typed',
 ]
-requires-python = '>=3.8'
+requires-python = '>=3.10'
 dependencies = [
-    'pyrate-limiter <3.0',
+    'pyrate-limiter ~=4.0',
     'requests       >=2.20',
 ]
 
