@@ -228,9 +228,9 @@ class LimiterSession(LimiterMixin, Session):
         per_month: Max requests per month
         burst: Max number of consecutive requests allowed before applying per-second rate-limiting
         bucket_class: Bucket backend class; may be one of
-            :py:class:`~pyrate_limiter.bucket.MemoryQueueBucket` (default),
-            :py:class:`~pyrate_limiter.sqlite_bucket.SQLiteBucket`, or
-            :py:class:`~pyrate_limiter.bucket.RedisBucket`
+            :py:class:`~pyrate_limiter.buckets.in_memory_bucket.InMemoryBucket` (default),
+            :py:class:`~pyrate_limiter.buckets.sqlite_bucket.SQLiteBucket`, or
+            :py:class:`~pyrate_limiter.buckets.redis_bucket.RedisBucket`
         bucket_kwargs: Bucket backend keyword arguments
         limiter: An existing Limiter object to use instead of the above params
         max_delay: The maximum allowed delay time (in seconds); anything over this will abort the
