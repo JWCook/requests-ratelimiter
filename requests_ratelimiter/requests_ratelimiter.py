@@ -1,8 +1,7 @@
 from fractions import Fraction
 from inspect import signature
 from logging import getLogger
-from time import sleep, time
-from typing import TYPE_CHECKING, Callable, Dict, Iterable, Optional, Type, Union
+from typing import TYPE_CHECKING, Callable, Dict, Iterable, Optional, Type
 from urllib.parse import urlparse
 from uuid import uuid4
 
@@ -38,7 +37,6 @@ class LimiterMixin(MIXIN_BASE):
         bucket_kwargs: Optional[Dict] = None,
         time_function: Optional[Callable[..., float]] = None,
         limiter: Optional[Limiter] = None,
-        max_delay: Union[int, float, None] = None,
         per_host: bool = True,
         limit_statuses: Iterable[int] = (429,),
         bucket_name: Optional[str] = None,
@@ -78,8 +76,9 @@ class LimiterMixin(MIXIN_BASE):
             self.limiter = Limiter(factory, buffer_ms=50)
             self._custom_limiter = False
 
+        if kwargs.pop('max_delay', None):
+            logger.warning('max_delay is no longer supported')
         self.limit_statuses = limit_statuses
-        self.max_delay = max_delay
         self.per_host = per_host
         self.bucket_name = bucket_name
         self._default_bucket = str(uuid4())
@@ -123,34 +122,9 @@ class LimiterMixin(MIXIN_BASE):
 
     # Conveniently, both Session.send() and HTTPAdapter.send() have a mostly consistent signature
     def send(self, request: PreparedRequest, **kwargs) -> Response:
-        """Send a request with rate-limiting.
-
-        Raises:
-            :py:exc:`.RuntimeError` if this request would result in a delay longer than ``max_delay``
-        """
+        """Send a request with rate-limiting."""
         bucket_name = self._bucket_name(request)
-
-        # pyrate-limiter v4 no longer supports max_delay; implement by retrying with timeout tracking
-        # TODO: I really don't love this busy-wait loop; consider adding bucket-level support upstream
-        if self.max_delay is not None:
-            start_time = time()
-
-            while True:
-                acquired = self.limiter.try_acquire(bucket_name, weight=1, blocking=False)
-                if acquired:
-                    break
-
-                # Not acquired - check if we've exceeded max_delay
-                elapsed = time() - start_time
-                if elapsed >= self.max_delay:
-                    raise RuntimeError(
-                        f'Rate limit exceeded. Unable to acquire permit within '
-                        f'max_delay ({self.max_delay}s)'
-                    )
-                sleep(0.05)
-        else:
-            # No max_delay - simple blocking acquire
-            self.limiter.try_acquire(bucket_name, weight=1, blocking=True)
+        self.limiter.try_acquire(bucket_name, weight=1, blocking=True)
 
         response = super().send(request, **kwargs)
         if response.status_code in self.limit_statuses:
@@ -233,8 +207,6 @@ class LimiterSession(LimiterMixin, Session):
             :py:class:`~pyrate_limiter.buckets.redis_bucket.RedisBucket`
         bucket_kwargs: Bucket backend keyword arguments
         limiter: An existing Limiter object to use instead of the above params
-        max_delay: The maximum allowed delay time (in seconds); anything over this will abort the
-            request and raise a :py:exc:`.BucketFullException`
         per_host: Track request rate limits separately for each host
         limit_statuses: Alternative HTTP status codes that indicate a rate limit was exceeded
     """
@@ -242,7 +214,6 @@ class LimiterSession(LimiterMixin, Session):
     __attrs__ = Session.__attrs__ + [
         'limiter',
         'limit_statuses',
-        'max_delay',
         'per_host',
         'bucket_name',
         '_default_bucket',
