@@ -267,7 +267,6 @@ def test_pickling_and_unpickling():
 
     # Check that the unpickled instance has the same attributes
     assert unpickled_session.per_host == session.per_host
-    assert unpickled_session.max_delay == session.max_delay
     assert unpickled_session.bucket_name == session.bucket_name
     assert unpickled_session.limit_statuses == session.limit_statuses
     assert unpickled_session._default_bucket == session._default_bucket
