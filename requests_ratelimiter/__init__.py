@@ -8,15 +8,19 @@ __all__ = [
     'LimiterAdapter',
     'LimiterMixin',
     'LimiterSession',
+    'HostBucketFactory',
     # pyrate-limiter main classes
     'Limiter',
-    'BucketFullException',
     'Duration',
-    'RequestRate',
+    'Rate',
+    'RateItem',
     # pyrate-limiter bucket backends
     'AbstractBucket',
-    'MemoryQueueBucket',
+    'BucketFactory',
+    'SingleBucketFactory',
+    'InMemoryBucket',
+    'MultiprocessBucket',
+    'PostgresBucket',
     'RedisBucket',
-    'RedisClusterBucket',
     'SQLiteBucket',
 ]

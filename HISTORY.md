@@ -1,5 +1,8 @@
 # History
 
+## 0.9.1 (2026-02-12)
+* Fix re-exported pyrate-limiter imports
+
 ## 0.9.0 (2026-02-09)
 * Migrate to pyrate-limiter v4
 * ⚠️ If you are using pyrate-limiter features directly (via `Limiter` class or custom bucket classes), see its [release notes](https://github.com/vutran1710/PyrateLimiter/blob/master/CHANGELOG.md) for info on breaking changes.

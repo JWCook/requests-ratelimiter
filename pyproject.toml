@@ -1,6 +1,6 @@
 [project]
 name = 'requests-ratelimiter'
-version = '0.9.0'
+version = '0.9.1'
 description = 'Rate-limiting for the requests library'
 authors = [{name = 'Jordan Cook'}]
 license = 'MIT'
