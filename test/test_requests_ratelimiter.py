@@ -5,14 +5,14 @@ additional behavior specific to requests-ratelimiter.
 
 import pickle
 from time import sleep
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from pyrate_limiter import Duration, InMemoryBucket, Limiter, Rate, SQLiteBucket
 from requests import Session
 from requests_cache import CacheMixin
 
-from requests_ratelimiter import LimiterAdapter, LimiterMixin, LimiterSession
+from requests_ratelimiter import LimiterMixin, LimiterSession
 from requests_ratelimiter.requests_ratelimiter import _convert_rate
 from test.conftest import (
     MOCKED_URL,
@@ -24,7 +24,6 @@ from test.conftest import (
 )
 
 patch_sleep = patch('pyrate_limiter.limiter.sleep', side_effect=sleep)
-rate = Rate(5, Duration.SECOND)
 
 
 @patch_sleep
@@ -41,10 +40,8 @@ def test_limiter_session(mock_sleep):
 
 
 @patch_sleep
-def test_limiter_adapter(mock_sleep, mock_send: MagicMock) -> None:
-    session = Session()
-    adapter = LimiterAdapter(per_second=5)
-    session.mount('http+mock://', adapter)
+def test_limiter_adapter(mock_sleep, limiter_adapter_session: tuple) -> None:
+    session, adapter = limiter_adapter_session
 
     for _ in range(5):
         session.get(MOCKED_URL)
@@ -275,14 +272,12 @@ def test_pickling_and_unpickling():
 # behaves as expected.
 
 
-def test_limiter_adapter_close_stops_leaker(mock_send: MagicMock) -> None:
+def test_limiter_adapter_close_stops_leaker(limiter_adapter_session: tuple) -> None:
     """LimiterAdapter.close() stops the Leaker thread."""
-    session = Session()
-    adapter = LimiterAdapter(per_second=5)
-    session.mount('https://', adapter)
+    session, adapter = limiter_adapter_session
     assert adapter.limiter.bucket_factory._leaker is None  # no thread before first request
 
-    session.get('https://example.com/test')
+    session.get(MOCKED_URL)
     leaker = adapter.limiter.bucket_factory._leaker
     assert leaker is not None
     assert leaker.is_alive()
@@ -318,13 +313,11 @@ def test_limiter_session_context_manager_stops_leaker():
     assert session.limiter.bucket_factory._leaker is None
 
 
-def test_session_close_cascades_to_limiter_adapter(mock_send: MagicMock) -> None:
+def test_session_close_cascades_to_limiter_adapter(limiter_adapter_session: tuple) -> None:
     """Closing a Session cascades to LimiterAdapter.close(), stopping the Leaker."""
-    session = Session()
-    adapter = LimiterAdapter(per_second=5)
-    session.mount('https://', adapter)
+    session, adapter = limiter_adapter_session
 
-    session.get('https://example.com/test')
+    session.get(MOCKED_URL)
     leaker = adapter.limiter.bucket_factory._leaker
     assert leaker is not None
     assert leaker.is_alive()

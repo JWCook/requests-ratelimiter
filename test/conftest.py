@@ -1,14 +1,14 @@
 from collections.abc import Generator
 from logging import basicConfig, getLogger
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
-from requests import Response
+from requests import Session
 from requests.adapters import HTTPAdapter
 from requests_mock import ANY as ANY_METHOD
 from requests_mock import Adapter
 
-from requests_ratelimiter import LimiterSession
+from requests_ratelimiter import LimiterAdapter, LimiterSession
 
 MOCK_PROTOCOLS = ['mock://', 'http+mock://', 'https+mock://']
 
@@ -59,17 +59,17 @@ def get_mock_adapter() -> Adapter:
     return adapter
 
 
-@pytest.fixture(params=[200])
-def mock_send(request: pytest.FixtureRequest) -> Generator[MagicMock, None, None]:
-    """Patch ``HTTPAdapter.send`` and return a response with the given status code.
+@pytest.fixture
+def limiter_adapter_session() -> Generator[tuple[Session, LimiterAdapter], None, None]:
+    """Yield a (session, adapter) pair with LimiterAdapter mounted and HTTPAdapter.send patched.
 
-    Defaults to 200. To use a different status code, parametrize indirectly::
-
-        @pytest.mark.parametrize('mock_send', [404], indirect=True)
-        def test_something(mock_send): ...
+    LimiterAdapter calls super().send() → HTTPAdapter.send() directly, bypassing session-level
+    adapter routing, so Strategy A (mounting a mock transport adapter) cannot intercept those
+    calls. This fixture patches HTTPAdapter.send for the duration of the test instead.
     """
-    status_code: int = request.param
-    response = Response()
-    response.status_code = status_code
-    with patch.object(HTTPAdapter, 'send', return_value=response) as mock:
-        yield mock
+    mock_adapter = get_mock_adapter()
+    with patch.object(HTTPAdapter, 'send', side_effect=mock_adapter.send):
+        session = Session()
+        adapter = LimiterAdapter(per_second=5)
+        session.mount('http+mock://', adapter)
+        yield session, adapter
