@@ -274,6 +274,7 @@ def test_pickling_and_unpickling():
 # The tests below verify that `LimiterMixin.close()` stops the Leaker and
 # behaves as expected.
 
+
 def test_limiter_adapter_close_stops_leaker(mock_send: MagicMock) -> None:
     """LimiterAdapter.close() stops the Leaker thread."""
     session = Session()
@@ -289,6 +290,7 @@ def test_limiter_adapter_close_stops_leaker(mock_send: MagicMock) -> None:
     adapter.close()
     assert leaker._stop_event.is_set()
     assert adapter.limiter.bucket_factory._leaker is None
+
 
 def test_limiter_session_close_stops_leaker():
     """LimiterSession.close() stops the Leaker thread spawned on the first request."""
@@ -314,6 +316,7 @@ def test_limiter_session_context_manager_stops_leaker():
 
     assert leaker._stop_event.is_set()  # __exit__ called close(); stop event must be set
     assert session.limiter.bucket_factory._leaker is None
+
 
 def test_session_close_cascades_to_limiter_adapter(mock_send: MagicMock) -> None:
     """Closing a Session cascades to LimiterAdapter.close(), stopping the Leaker."""
