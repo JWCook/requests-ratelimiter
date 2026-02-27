@@ -181,6 +181,20 @@ class LimiterMixin(MIXIN_BASE):
             filler_item = RateItem(bucket_name, now, weight=1)
             bucket.put(filler_item)
 
+    def close(self) -> None:
+        """Close the session or adapter and release all rate-limiter resources.
+
+        Calls the parent ``close()`` to tear down connection pools, then stops the
+        background ``Leaker`` thread owned by the internal
+        :class:`~pyrate_limiter.BucketFactory`.  The thread is only stopped when the
+        limiter was created internally (i.e. via the ``per_second`` / ``per_minute`` /
+        … parameters); if a custom :class:`~pyrate_limiter.Limiter` was supplied by the
+        caller its lifecycle is the caller's responsibility.
+        """
+        super().close()
+        if not self._custom_limiter:
+            self.limiter.bucket_factory.close()
+
 
 class LimiterSession(LimiterMixin, Session):
     """`Session <https://requests.readthedocs.io/en/latest/user/advanced/#session-objects>`_

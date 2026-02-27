@@ -1,5 +1,10 @@
+from collections.abc import Generator
 from logging import basicConfig, getLogger
+from unittest.mock import MagicMock, patch
 
+import pytest
+from requests import Response
+from requests.adapters import HTTPAdapter
 from requests_mock import ANY as ANY_METHOD
 from requests_mock import Adapter
 
@@ -52,3 +57,19 @@ def get_mock_adapter() -> Adapter:
     adapter.register_uri(ANY_METHOD, MOCKED_URL_429, status_code=429)
     adapter.register_uri(ANY_METHOD, MOCKED_URL_500, status_code=500)
     return adapter
+
+
+@pytest.fixture(params=[200])
+def mock_send(request: pytest.FixtureRequest) -> Generator[MagicMock, None, None]:
+    """Patch ``HTTPAdapter.send`` and return a response with the given status code.
+
+    Defaults to 200. To use a different status code, parametrize indirectly::
+
+        @pytest.mark.parametrize('mock_send', [404], indirect=True)
+        def test_something(mock_send): ...
+    """
+    status_code: int = request.param
+    response = Response()
+    response.status_code = status_code
+    with patch.object(HTTPAdapter, 'send', return_value=response) as mock:
+        yield mock
