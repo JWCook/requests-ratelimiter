@@ -5,12 +5,11 @@ additional behavior specific to requests-ratelimiter.
 
 import pickle
 from time import sleep
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from pyrate_limiter import Duration, InMemoryBucket, Limiter, Rate, SQLiteBucket
-from requests import Response, Session
-from requests.adapters import HTTPAdapter
+from requests import Session
 from requests_cache import CacheMixin
 
 from requests_ratelimiter import LimiterAdapter, LimiterMixin, LimiterSession
@@ -42,15 +41,7 @@ def test_limiter_session(mock_sleep):
 
 
 @patch_sleep
-@patch.object(HTTPAdapter, 'send')
-def test_limiter_adapter(mock_send, mock_sleep):
-    # To allow mounting a mock:// URL, we need to patch HTTPAdapter.send()
-    # so it doesn't validate the protocol
-    mock_response = Response()
-    mock_response.url = MOCKED_URL
-    mock_response.status = 200
-    mock_send.return_value = mock_response
-
+def test_limiter_adapter(mock_sleep, mock_send: MagicMock) -> None:
     session = Session()
     adapter = LimiterAdapter(per_second=5)
     session.mount('http+mock://', adapter)
@@ -270,3 +261,82 @@ def test_pickling_and_unpickling():
     assert unpickled_session.bucket_name == session.bucket_name
     assert unpickled_session.limit_statuses == session.limit_statuses
     assert unpickled_session._default_bucket == session._default_bucket
+
+
+# Tests for lifecycle of bucket factory leaker thread:
+#
+# pyrate-limiter 4 introduced a background `Leaker` thread per `BucketFactory`.
+# Because `LimiterMixin` creates the `BucketFactory` internally, it must also be
+# responsible for tearing it down. Without an explicit `close()` override, every
+# `LimiterAdapter` or `LimiterSession` that is discarded after use leaves a
+# daemon thread running until the process exits.
+#
+# The tests below verify that `LimiterMixin.close()` stops the Leaker and
+# behaves as expected.
+
+
+def test_limiter_adapter_close_stops_leaker(mock_send: MagicMock) -> None:
+    """LimiterAdapter.close() stops the Leaker thread."""
+    session = Session()
+    adapter = LimiterAdapter(per_second=5)
+    session.mount('https://', adapter)
+    assert adapter.limiter.bucket_factory._leaker is None  # no thread before first request
+
+    session.get('https://example.com/test')
+    leaker = adapter.limiter.bucket_factory._leaker
+    assert leaker is not None
+    assert leaker.is_alive()
+
+    adapter.close()
+    assert leaker._stop_event.is_set()
+    assert adapter.limiter.bucket_factory._leaker is None
+
+
+def test_limiter_session_close_stops_leaker():
+    """LimiterSession.close() stops the Leaker thread spawned on the first request."""
+    session = get_mock_session(per_second=5)
+    assert session.limiter.bucket_factory._leaker is None  # no thread before first request
+
+    session.get(MOCKED_URL)
+    leaker = session.limiter.bucket_factory._leaker
+    assert leaker is not None
+    assert leaker.is_alive()
+
+    session.close()
+    assert leaker._stop_event.is_set()
+    assert session.limiter.bucket_factory._leaker is None
+
+
+def test_limiter_session_context_manager_stops_leaker():
+    """Using LimiterSession as a context manager stops the Leaker on __exit__."""
+    with get_mock_session(per_second=5) as session:
+        session.get(MOCKED_URL)
+        leaker = session.limiter.bucket_factory._leaker
+        assert leaker is not None
+
+    assert leaker._stop_event.is_set()  # __exit__ called close(); stop event must be set
+    assert session.limiter.bucket_factory._leaker is None
+
+
+def test_session_close_cascades_to_limiter_adapter(mock_send: MagicMock) -> None:
+    """Closing a Session cascades to LimiterAdapter.close(), stopping the Leaker."""
+    session = Session()
+    adapter = LimiterAdapter(per_second=5)
+    session.mount('https://', adapter)
+
+    session.get('https://example.com/test')
+    leaker = adapter.limiter.bucket_factory._leaker
+    assert leaker is not None
+    assert leaker.is_alive()
+
+    session.close()
+    assert leaker._stop_event.is_set()
+    assert adapter.limiter.bucket_factory._leaker is None
+
+
+def test_close_before_any_request_and_idempotent():
+    """close() before any request is a safe no-op; calling it twice does not raise."""
+    session = LimiterSession(per_second=5)
+    assert session.limiter.bucket_factory._leaker is None
+    session.close()  # no Leaker was ever created — must not raise
+    session.close()  # second call must also be safe
