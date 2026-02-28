@@ -1,5 +1,9 @@
 # History
 
+## 0.9.2 (2026-02-27)
+* Stop leaker thread when session closes
+* Add tests for python 3.15
+
 ## 0.9.1 (2026-02-12)
 * Fix re-exported pyrate-limiter imports
 
