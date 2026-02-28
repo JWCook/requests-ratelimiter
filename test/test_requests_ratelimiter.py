@@ -5,14 +5,15 @@ additional behavior specific to requests-ratelimiter.
 
 import pickle
 from time import sleep
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from pyrate_limiter import Duration, InMemoryBucket, Limiter, Rate, SQLiteBucket
-from requests import Session
+from requests import PreparedRequest, Session
 from requests_cache import CacheMixin
 
 from requests_ratelimiter import LimiterMixin, LimiterSession
+from requests_ratelimiter.buckets import prepare_sqlite_kwargs
 from requests_ratelimiter.requests_ratelimiter import _convert_rate
 from test.conftest import (
     MOCKED_URL,
@@ -303,3 +304,99 @@ def test_close_before_any_request_and_idempotent():
     assert session.limiter.bucket_factory._leaker is None
     session.close()  # no Leaker was ever created — must not raise
     session.close()  # second call must also be safe
+
+
+@patch_sleep
+def test_fill_bucket_with_custom_limiter(mock_sleep):
+    """_fill_bucket falls back to limiter.buckets() when a custom Limiter is provided"""
+    bucket = InMemoryBucket([Rate(5, Duration.SECOND)])
+    limiter = Limiter(bucket)
+    session = get_mock_session(limiter=limiter)
+    session.get(MOCKED_URL_429)
+    session.get(MOCKED_URL_429)
+    assert mock_sleep.called
+
+
+@patch_sleep
+def test_pickling_preserves_rate_limiting(mock_sleep):
+    """Unpickled session can make requests and enforces rate limits"""
+    session = get_mock_session(per_second=5)
+    unpickled = pickle.loads(pickle.dumps(session))
+    # Re-mount mock adapter since it's not preserved through pickling
+    unpickled = mount_mock_adapter(unpickled)
+    for _ in range(5):
+        unpickled.get(MOCKED_URL)
+    assert mock_sleep.called is False
+    unpickled.get(MOCKED_URL)
+    assert mock_sleep.called is True
+
+
+def test_fill_bucket_no_bucket_logs_warning(caplog):
+    """_fill_bucket with no available bucket logs a warning and returns cleanly"""
+    mock_limiter = MagicMock()
+    del mock_limiter.bucket_factory.__getitem__  # no dict-like access
+    mock_limiter.buckets.return_value = []
+    session = LimiterSession.__new__(LimiterSession)
+    session.limiter = mock_limiter
+    session.per_host = False
+    session._default_bucket = 'test'
+    session.bucket_name = None
+    req = PreparedRequest()
+    req.url = MOCKED_URL
+    with caplog.at_level('WARNING', logger='requests_ratelimiter'):
+        session._fill_bucket(req)
+    assert 'No buckets available' in caplog.text
+
+
+@patch_sleep
+def test_custom_bucket_class(mock_sleep):
+    """A custom AbstractBucket subclass works end-to-end"""
+
+    class MyBucket(InMemoryBucket):
+        pass
+
+    session = get_mock_session(per_second=5, bucket_class=MyBucket)
+    for _ in range(5):
+        session.get(MOCKED_URL)
+    assert mock_sleep.called is False
+    session.get(MOCKED_URL)
+    assert mock_sleep.called is True
+
+
+def test_bucket_name_overrides_per_host():
+    """Explicit bucket_name takes priority over per_host=True"""
+    session = LimiterSession(per_second=5, bucket_name='fixed', per_host=True)
+    req = PreparedRequest()
+    req.url = MOCKED_URL
+    assert session._bucket_name(req) == 'fixed'
+
+
+@pytest.mark.parametrize(
+    'kwargs, bucket_name, expected',
+    [
+        ({'path': '/tmp/x.db'}, None, {'db_path': '/tmp/x.db'}),
+        ({}, 'mybucket', {'table': 'bucket_mybucket'}),
+        ({'path': '/tmp/x.db', 'unknown_key': 'val'}, None, {'db_path': '/tmp/x.db'}),
+        ({'table': 'custom'}, 'mybucket', {'table': 'custom'}),  # explicit table not overridden
+    ],
+)
+def test_prepare_sqlite_kwargs(kwargs, bucket_name, expected):
+    result = prepare_sqlite_kwargs(kwargs, bucket_name)
+    assert result == expected
+
+
+def test_max_delay_logs_warning(caplog):
+    with caplog.at_level('WARNING', logger='requests_ratelimiter'):
+        LimiterSession(per_second=5, max_delay=10)
+    assert 'max_delay' in caplog.text
+
+
+@patch_sleep
+def test_burst_allows_consecutive_requests(mock_sleep):
+    """burst=3 allows 3 rapid consecutive requests before enforcing per-second limit"""
+    session = get_mock_session(per_second=1, burst=3)
+    for _ in range(3):
+        session.get(MOCKED_URL)
+    assert mock_sleep.called is False
+    session.get(MOCKED_URL)
+    assert mock_sleep.called is True
