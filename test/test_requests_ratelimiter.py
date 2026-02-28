@@ -21,6 +21,7 @@ from test.conftest import (
     MOCKED_URL_ALT_HOST,
     get_mock_session,
     mount_mock_adapter,
+    SQLITE_BUCKET_KWARGS,
 )
 
 patch_sleep = patch('pyrate_limiter.limiter.sleep', side_effect=sleep)
@@ -116,6 +117,10 @@ def test_429__per_host(mock_sleep):
     session.get(MOCKED_URL_ALT_HOST)
     assert mock_sleep.called is False
 
+    # But a second request to the original host should be delayed (its bucket was filled)
+    session.get(MOCKED_URL_429)
+    assert mock_sleep.called is True
+
 
 @pytest.mark.parametrize(
     'limit, interval, expected_limit, expected_interval',
@@ -138,11 +143,7 @@ def test_sqlite_backend(mock_sleep, tmp_path):
     session = get_mock_session(
         per_second=5,
         bucket_class=SQLiteBucket,
-        bucket_kwargs={
-            'path': tmp_path / 'rate_limit.db',
-            'isolation_level': 'EXCLUSIVE',
-            'check_same_thread': False,
-        },
+        bucket_kwargs={'path': tmp_path / 'rate_limit.db', **SQLITE_BUCKET_KWARGS},
     )
 
     for _ in range(5):
@@ -164,21 +165,13 @@ def test_custom_bucket(mock_sleep, tmp_path):
         per_second=5,
         bucket_name='a',
         bucket_class=SQLiteBucket,
-        bucket_kwargs={
-            'path': ratelimit_path,
-            'isolation_level': 'EXCLUSIVE',
-            'check_same_thread': False,
-        },
+        bucket_kwargs={'path': ratelimit_path, **SQLITE_BUCKET_KWARGS},
     )
     session_b = get_mock_session(
         per_second=5,
         bucket_name='b',
         bucket_class=SQLiteBucket,
-        bucket_kwargs={
-            'path': ratelimit_path,
-            'isolation_level': 'EXCLUSIVE',
-            'check_same_thread': False,
-        },
+        bucket_kwargs={'path': ratelimit_path, **SQLITE_BUCKET_KWARGS},
     )
 
     for _ in range(5):
@@ -207,11 +200,7 @@ def test_cache_with_limiter(mock_sleep, tmp_path_factory):
         per_second=5,
         cache_name=str(cache_path),
         bucket_class=SQLiteBucket,
-        bucket_kwargs={
-            'path': str(ratelimit_path),
-            'isolation_level': 'EXCLUSIVE',
-            'check_same_thread': False,
-        },
+        bucket_kwargs={'path': ratelimit_path, **SQLITE_BUCKET_KWARGS},
     )
     session = mount_mock_adapter(session)
 
@@ -221,23 +210,18 @@ def test_cache_with_limiter(mock_sleep, tmp_path_factory):
 
 
 def test_inherited_session_attributes():
-    # Test that inherited Session attributes are preserved
+    """Inherited Session attributes are present and initialised by the base Session."""
     session = LimiterSession(per_second=5)
-    assert hasattr(session, 'headers')
-    assert hasattr(session, 'cookies')
-    assert hasattr(session, 'auth')
-    assert hasattr(session, 'hooks')
+    assert session.headers is not None
+    assert session.cookies is not None
+    assert session.auth is None  # Session default
+    assert session.hooks is not None
 
 
 def test_pickling_and_unpickling():
-    # Test pickling and unpickling of LimiterSession instance
     session = LimiterSession(per_second=5)
-    pickled_session = pickle.dumps(session)
-    assert pickled_session is not None
-    unpickled_session = pickle.loads(pickled_session)
-    assert unpickled_session is not None
+    unpickled_session = pickle.loads(pickle.dumps(session))
 
-    # Check that the unpickled instance has the same attributes
     assert unpickled_session.per_host == session.per_host
     assert unpickled_session.bucket_name == session.bucket_name
     assert unpickled_session.limit_statuses == session.limit_statuses
@@ -256,6 +240,12 @@ def test_pickling_and_unpickling():
 # behaves as expected.
 
 
+def _assert_leaker_stopped(leaker, bucket_factory) -> None:
+    """Assert that a Leaker thread has been stopped and cleared from the bucket factory."""
+    assert leaker._stop_event.is_set()
+    assert bucket_factory._leaker is None
+
+
 def test_limiter_adapter_close_stops_leaker(limiter_adapter_session: tuple) -> None:
     """LimiterAdapter.close() stops the Leaker thread."""
     session, adapter = limiter_adapter_session
@@ -267,8 +257,7 @@ def test_limiter_adapter_close_stops_leaker(limiter_adapter_session: tuple) -> N
     assert leaker.is_alive()
 
     adapter.close()
-    assert leaker._stop_event.is_set()
-    assert adapter.limiter.bucket_factory._leaker is None
+    _assert_leaker_stopped(leaker, adapter.limiter.bucket_factory)
 
 
 def test_limiter_session_close_stops_leaker():
@@ -282,8 +271,7 @@ def test_limiter_session_close_stops_leaker():
     assert leaker.is_alive()
 
     session.close()
-    assert leaker._stop_event.is_set()
-    assert session.limiter.bucket_factory._leaker is None
+    _assert_leaker_stopped(leaker, session.limiter.bucket_factory)
 
 
 def test_limiter_session_context_manager_stops_leaker():
@@ -293,8 +281,7 @@ def test_limiter_session_context_manager_stops_leaker():
         leaker = session.limiter.bucket_factory._leaker
         assert leaker is not None
 
-    assert leaker._stop_event.is_set()  # __exit__ called close(); stop event must be set
-    assert session.limiter.bucket_factory._leaker is None
+    _assert_leaker_stopped(leaker, session.limiter.bucket_factory)  # __exit__ calls close()
 
 
 def test_session_close_cascades_to_limiter_adapter(limiter_adapter_session: tuple) -> None:
@@ -307,8 +294,7 @@ def test_session_close_cascades_to_limiter_adapter(limiter_adapter_session: tupl
     assert leaker.is_alive()
 
     session.close()
-    assert leaker._stop_event.is_set()
-    assert adapter.limiter.bucket_factory._leaker is None
+    _assert_leaker_stopped(leaker, adapter.limiter.bucket_factory)
 
 
 def test_close_before_any_request_and_idempotent():

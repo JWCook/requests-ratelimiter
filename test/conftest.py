@@ -17,6 +17,11 @@ MOCKED_URL_ALT_HOST = 'http+mock://requests-ratelimiter-2.com/text'
 MOCKED_URL_429 = 'http+mock://requests-ratelimiter.com/429'
 MOCKED_URL_500 = 'http+mock://requests-ratelimiter.com/500'
 
+SQLITE_BUCKET_KWARGS = {
+    'isolation_level': 'EXCLUSIVE',
+    'check_same_thread': False,
+}
+
 # Configure logging to show log output when tests fail (or with pytest -s)
 basicConfig(level='INFO')
 getLogger('requests_ratelimiter').setLevel('DEBUG')
