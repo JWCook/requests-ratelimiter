@@ -219,16 +219,6 @@ def test_inherited_session_attributes():
     assert session.hooks is not None
 
 
-def test_pickling_and_unpickling():
-    session = LimiterSession(per_second=5)
-    unpickled_session = pickle.loads(pickle.dumps(session))
-
-    assert unpickled_session.per_host == session.per_host
-    assert unpickled_session.bucket_name == session.bucket_name
-    assert unpickled_session.limit_statuses == session.limit_statuses
-    assert unpickled_session._default_bucket == session._default_bucket
-
-
 # Tests for lifecycle of bucket factory leaker thread:
 #
 # pyrate-limiter 4 introduced a background `Leaker` thread per `BucketFactory`.
@@ -317,20 +307,6 @@ def test_fill_bucket_with_custom_limiter(mock_sleep):
     assert mock_sleep.called
 
 
-@patch_sleep
-def test_pickling_preserves_rate_limiting(mock_sleep):
-    """Unpickled session can make requests and enforces rate limits"""
-    session = get_mock_session(per_second=5)
-    unpickled = pickle.loads(pickle.dumps(session))
-    # Re-mount mock adapter since it's not preserved through pickling
-    unpickled = mount_mock_adapter(unpickled)
-    for _ in range(5):
-        unpickled.get(MOCKED_URL)
-    assert mock_sleep.called is False
-    unpickled.get(MOCKED_URL)
-    assert mock_sleep.called is True
-
-
 def test_fill_bucket_no_bucket_logs_warning(caplog):
     """_fill_bucket with no available bucket logs a warning and returns cleanly"""
     mock_limiter = MagicMock()
@@ -399,4 +375,35 @@ def test_burst_allows_consecutive_requests(mock_sleep):
         session.get(MOCKED_URL)
     assert mock_sleep.called is False
     session.get(MOCKED_URL)
+    assert mock_sleep.called is True
+
+
+@patch_sleep
+@pytest.mark.parametrize(
+    'bucket_class,bucket_kwargs',
+    [
+        (InMemoryBucket, {}),  # InMemoryBucket
+        (SQLiteBucket, None),  # SQLiteBucket (will use fixture to provide kwargs)
+    ],
+    ids=['in_memory', 'sqlite'],
+)
+def test_pickling(mock_sleep, bucket_class, bucket_kwargs, tmp_path):
+    if bucket_class == SQLiteBucket:
+        bucket_kwargs = {'path': tmp_path / 'rate_limit.db', **SQLITE_BUCKET_KWARGS}
+    elif bucket_kwargs is None:
+        bucket_kwargs = {}
+
+    session = get_mock_session(per_second=5, bucket_class=bucket_class, bucket_kwargs=bucket_kwargs)
+    unpickled = pickle.loads(pickle.dumps(session))
+    # Re-mount mock adapter since it's not preserved through pickling
+    unpickled = mount_mock_adapter(unpickled)
+    assert unpickled.per_host == session.per_host
+    assert unpickled.bucket_name == session.bucket_name
+    assert unpickled.limit_statuses == session.limit_statuses
+    assert unpickled._default_bucket == session._default_bucket
+
+    for _ in range(5):
+        unpickled.get(MOCKED_URL)
+    assert mock_sleep.called is False
+    unpickled.get(MOCKED_URL)
     assert mock_sleep.called is True

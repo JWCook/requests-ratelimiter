@@ -1,5 +1,8 @@
 # History
 
+## Unreleased
+* Use built-in support for pickling `Limiter` from pyrate-limiter 4.?.?
+
 ## 0.9.2 (2026-02-27)
 * Stop leaker thread when session closes
 * Add tests for python 3.15
