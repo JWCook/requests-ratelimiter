@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from pyrate_limiter import Duration, InMemoryBucket, Limiter, Rate, SQLiteBucket
+from pyrate_limiter import RedisBucket
 from requests import PreparedRequest, Session
 from requests_cache import CacheMixin
 
@@ -322,6 +323,26 @@ def test_fill_bucket_no_bucket_logs_warning(caplog):
     with caplog.at_level('WARNING', logger='requests_ratelimiter'):
         session._fill_bucket(req)
     assert 'No buckets available' in caplog.text
+
+
+@patch_sleep
+@patch.object(RedisBucket, 'init', wraps=RedisBucket.init)
+def test_redis_bucket(mock_init, mock_sleep):
+    mock_redis = MagicMock()
+    mock_redis.script_load.return_value = 'fake_sha1'
+    mock_redis.evalsha.return_value = -1  # -1 = item was inserted successfully
+
+    session = get_mock_session(
+        per_second=5,
+        bucket_class=RedisBucket,
+        bucket_kwargs={'redis': mock_redis, 'bucket_key': 'test_bucket'},
+    )
+    session.get(MOCKED_URL)
+
+    mock_init.assert_called_once()
+    _, kwargs = mock_init.call_args
+    assert kwargs['redis'] is mock_redis
+    assert kwargs['bucket_key'] == 'test_bucket'
 
 
 @patch_sleep

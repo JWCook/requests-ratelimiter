@@ -1,7 +1,8 @@
 # History
 
 ## Unreleased
-* Use built-in support for pickling `Limiter` from pyrate-limiter 4.?.?
+* Fix compatibility with `RedisBucket`
+* Use built-in support for pickling `Limiter` from pyrate-limiter 4.1.0
 
 ## 0.9.2 (2026-02-27)
 * Stop leaker thread when session closes
