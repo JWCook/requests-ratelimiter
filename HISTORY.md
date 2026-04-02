@@ -2,6 +2,7 @@
 
 ## Unreleased
 * Fix compatibility with `RedisBucket`
+* Fix compatibility with `PostgresBucket`
 * Use built-in support for pickling `Limiter` from pyrate-limiter 4.1.0
 
 ## 0.9.2 (2026-02-27)

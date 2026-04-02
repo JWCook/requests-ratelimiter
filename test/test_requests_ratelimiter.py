@@ -8,13 +8,20 @@ from time import sleep
 from unittest.mock import MagicMock, patch
 
 import pytest
-from pyrate_limiter import Duration, InMemoryBucket, Limiter, Rate, SQLiteBucket
-from pyrate_limiter import RedisBucket
+from pyrate_limiter import (
+    Duration,
+    InMemoryBucket,
+    Limiter,
+    PostgresBucket,
+    Rate,
+    RedisBucket,
+    SQLiteBucket,
+)
 from requests import PreparedRequest, Session
 from requests_cache import CacheMixin
 
 from requests_ratelimiter import LimiterMixin, LimiterSession
-from requests_ratelimiter.buckets import prepare_sqlite_kwargs
+from requests_ratelimiter.buckets import HostBucketFactory, prepare_sqlite_kwargs
 from requests_ratelimiter.requests_ratelimiter import _convert_rate
 from test.conftest import (
     MOCKED_URL,
@@ -325,30 +332,44 @@ def test_fill_bucket_no_bucket_logs_warning(caplog):
     assert 'No buckets available' in caplog.text
 
 
-@patch_sleep
-@patch.object(RedisBucket, 'init', wraps=RedisBucket.init)
-def test_redis_bucket(mock_init, mock_sleep):
+def test_redis_bucket():
     mock_redis = MagicMock()
     mock_redis.script_load.return_value = 'fake_sha1'
-    mock_redis.evalsha.return_value = -1  # -1 = item was inserted successfully
-
-    session = get_mock_session(
-        per_second=5,
+    factory = HostBucketFactory(
+        rates=[Rate(5, 1000)],
         bucket_class=RedisBucket,
-        bucket_kwargs={'redis': mock_redis, 'bucket_key': 'test_bucket'},
+        bucket_init_kwargs={'redis': mock_redis, 'bucket_key': 'test_bucket'},
     )
-    session.get(MOCKED_URL)
+
+    with patch.object(RedisBucket, 'init', wraps=RedisBucket.init) as mock_init:
+        factory._create_bucket()
+
+    mock_init.assert_called_once_with(
+        rates=factory.rates, redis=mock_redis, bucket_key='test_bucket'
+    )
+
+
+def test_postgres_bucket():
+    mock_pool = MagicMock()
+    factory = HostBucketFactory(
+        rates=[Rate(5, 1000)],
+        bucket_class=PostgresBucket,
+        bucket_init_kwargs={'pool': mock_pool, 'table': 'test_table'},
+    )
+
+    with patch.object(PostgresBucket, '__init__', autospec=True, return_value=None) as mock_init:
+        mock_init.side_effect = lambda self, pool, table, rates: (
+            setattr(self, 'rates', rates) or setattr(self, 'failing_rate', None)
+        )
+        factory._create_bucket()
 
     mock_init.assert_called_once()
     _, kwargs = mock_init.call_args
-    assert kwargs['redis'] is mock_redis
-    assert kwargs['bucket_key'] == 'test_bucket'
+    assert kwargs == {'pool': mock_pool, 'table': 'test_table', 'rates': factory.rates}
 
 
 @patch_sleep
 def test_custom_bucket_class(mock_sleep):
-    """A custom AbstractBucket subclass works end-to-end"""
-
     class MyBucket(InMemoryBucket):
         pass
 
