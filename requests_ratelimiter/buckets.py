@@ -1,6 +1,6 @@
 from typing import Dict, Optional, Type
 
-from pyrate_limiter import InMemoryBucket, Rate, RedisBucket, SQLiteBucket
+from pyrate_limiter import InMemoryBucket, PostgresBucket, Rate, RedisBucket, SQLiteBucket
 from pyrate_limiter.abstracts import AbstractBucket, BucketFactory, RateItem
 
 
@@ -51,6 +51,11 @@ class HostBucketFactory(BucketFactory):
             bucket_key = kwargs.pop('bucket_key', self.bucket_name or 'default')
             redis = kwargs.pop('redis')
             return RedisBucket.init(rates=self.rates, redis=redis, bucket_key=bucket_key)
+        elif self.bucket_class == PostgresBucket:
+            kwargs = self.bucket_init_kwargs.copy()
+            pool = kwargs.pop('pool')
+            table = kwargs.pop('table', self.bucket_name or 'default')
+            return PostgresBucket(pool=pool, table=table, rates=self.rates)
         else:
             # Generic bucket creation - pass rates as first arg
             return self.bucket_class(self.rates, **self.bucket_init_kwargs)
