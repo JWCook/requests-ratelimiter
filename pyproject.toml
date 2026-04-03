@@ -72,6 +72,11 @@ output = 'test-reports/coverage.xml'
 [tool.mypy]
 ignore_missing_imports = true
 
+[tool.pytest.ini_options]
+markers = [
+    'integration: marks tests that run against a local HTTP server (deselect with -m "not integration")',
+]
+
 [tool.ruff]
 fix = true
 unsafe-fixes = true

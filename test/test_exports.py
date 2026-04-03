@@ -1,8 +1,6 @@
-# ruff: noqa: F403
-# Test pyrate-limiter classes exported from requests_ratelimiter namespace (only possible in module scope)
-from requests_ratelimiter import *
+import requests_ratelimiter
 
 
-# Stub for pytest collection
 def test_exports():
-    pass
+    for name in requests_ratelimiter.__all__:
+        assert hasattr(requests_ratelimiter, name), f'{name} not found in requests_ratelimiter'

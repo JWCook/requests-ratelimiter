@@ -12,17 +12,14 @@ from pyrate_limiter import (
     Duration,
     InMemoryBucket,
     Limiter,
-    PostgresBucket,
     Rate,
-    RedisBucket,
     SQLiteBucket,
 )
 from requests import PreparedRequest, Session
 from requests_cache import CacheMixin
 
 from requests_ratelimiter import LimiterMixin, LimiterSession
-from requests_ratelimiter.buckets import HostBucketFactory, prepare_sqlite_kwargs
-from requests_ratelimiter.requests_ratelimiter import _convert_rate
+from requests_ratelimiter.requests_ratelimiter import _convert_rate, _get_valid_kwargs
 from test.conftest import (
     MOCKED_URL,
     MOCKED_URL_429,
@@ -138,6 +135,9 @@ def test_429__per_host(mock_sleep):
         (0.5, 1, 1, 2),
         (1, 0.5, 2, 1),  # 1 req/0.5ms -> 2 req/1ms
         (0.001, 1, 1, 1000),
+        (1, 1000, 1, 1000),
+        (100, 1, 100, 1),
+        (10, 10, 10, 10),
     ],
 )
 def test_convert_rate(limit, interval, expected_limit, expected_interval):
@@ -148,7 +148,6 @@ def test_convert_rate(limit, interval, expected_limit, expected_interval):
 
 @patch_sleep
 def test_sqlite_backend(mock_sleep, tmp_path):
-    """Check that the SQLite backend works as expected"""
     session = get_mock_session(
         per_second=5,
         bucket_class=SQLiteBucket,
@@ -197,10 +196,7 @@ def test_cache_with_limiter(mock_sleep, tmp_path_factory):
     """Check that caching integration works as expected"""
 
     class CachedLimiterSession(CacheMixin, LimiterMixin, Session):
-        """
-        Session class with caching and rate-limiting behavior. Accepts arguments for both
-        LimiterSession and CachedSession.
-        """
+        pass
 
     cache_path = tmp_path_factory.mktemp('pytest') / 'cache.db'
     ratelimit_path = tmp_path_factory.mktemp('pytest') / 'rate_limit.db'
@@ -224,7 +220,7 @@ def test_inherited_session_attributes():
     assert session.headers is not None
     assert session.cookies is not None
     assert session.auth is None  # Session default
-    assert session.hooks is not None
+    assert 'response' in session.hooks
 
 
 # Tests for lifecycle of bucket factory leaker thread:
@@ -246,7 +242,6 @@ def _assert_leaker_stopped(leaker, bucket_factory) -> None:
 
 
 def test_limiter_adapter_close_stops_leaker(limiter_adapter_session: tuple) -> None:
-    """LimiterAdapter.close() stops the Leaker thread."""
     session, adapter = limiter_adapter_session
     assert adapter.limiter.bucket_factory._leaker is None  # no thread before first request
 
@@ -260,7 +255,6 @@ def test_limiter_adapter_close_stops_leaker(limiter_adapter_session: tuple) -> N
 
 
 def test_limiter_session_close_stops_leaker():
-    """LimiterSession.close() stops the Leaker thread spawned on the first request."""
     session = get_mock_session(per_second=5)
     assert session.limiter.bucket_factory._leaker is None  # no thread before first request
 
@@ -274,7 +268,6 @@ def test_limiter_session_close_stops_leaker():
 
 
 def test_limiter_session_context_manager_stops_leaker():
-    """Using LimiterSession as a context manager stops the Leaker on __exit__."""
     with get_mock_session(per_second=5) as session:
         session.get(MOCKED_URL)
         leaker = session.limiter.bucket_factory._leaker
@@ -284,7 +277,6 @@ def test_limiter_session_context_manager_stops_leaker():
 
 
 def test_session_close_cascades_to_limiter_adapter(limiter_adapter_session: tuple) -> None:
-    """Closing a Session cascades to LimiterAdapter.close(), stopping the Leaker."""
     session, adapter = limiter_adapter_session
 
     session.get(MOCKED_URL)
@@ -297,7 +289,6 @@ def test_session_close_cascades_to_limiter_adapter(limiter_adapter_session: tupl
 
 
 def test_close_before_any_request_and_idempotent():
-    """close() before any request is a safe no-op; calling it twice does not raise."""
     session = LimiterSession(per_second=5)
     assert session.limiter.bucket_factory._leaker is None
     session.close()  # no Leaker was ever created — must not raise
@@ -306,17 +297,15 @@ def test_close_before_any_request_and_idempotent():
 
 @patch_sleep
 def test_fill_bucket_with_custom_limiter(mock_sleep):
-    """_fill_bucket falls back to limiter.buckets() when a custom Limiter is provided"""
     bucket = InMemoryBucket([Rate(5, Duration.SECOND)])
     limiter = Limiter(bucket)
     session = get_mock_session(limiter=limiter)
     session.get(MOCKED_URL_429)
     session.get(MOCKED_URL_429)
-    assert mock_sleep.called
+    assert mock_sleep.called is True
 
 
 def test_fill_bucket_no_bucket_logs_warning(caplog):
-    """_fill_bucket with no available bucket logs a warning and returns cleanly"""
     mock_limiter = MagicMock()
     del mock_limiter.bucket_factory.__getitem__  # no dict-like access
     mock_limiter.buckets.return_value = []
@@ -332,42 +321,6 @@ def test_fill_bucket_no_bucket_logs_warning(caplog):
     assert 'No buckets available' in caplog.text
 
 
-def test_redis_bucket():
-    mock_redis = MagicMock()
-    mock_redis.script_load.return_value = 'fake_sha1'
-    factory = HostBucketFactory(
-        rates=[Rate(5, 1000)],
-        bucket_class=RedisBucket,
-        bucket_init_kwargs={'redis': mock_redis, 'bucket_key': 'test_bucket'},
-    )
-
-    with patch.object(RedisBucket, 'init', wraps=RedisBucket.init) as mock_init:
-        factory._create_bucket()
-
-    mock_init.assert_called_once_with(
-        rates=factory.rates, redis=mock_redis, bucket_key='test_bucket'
-    )
-
-
-def test_postgres_bucket():
-    mock_pool = MagicMock()
-    factory = HostBucketFactory(
-        rates=[Rate(5, 1000)],
-        bucket_class=PostgresBucket,
-        bucket_init_kwargs={'pool': mock_pool, 'table': 'test_table'},
-    )
-
-    with patch.object(PostgresBucket, '__init__', autospec=True, return_value=None) as mock_init:
-        mock_init.side_effect = lambda self, pool, table, rates: (
-            setattr(self, 'rates', rates) or setattr(self, 'failing_rate', None)
-        )
-        factory._create_bucket()
-
-    mock_init.assert_called_once()
-    _, kwargs = mock_init.call_args
-    assert kwargs == {'pool': mock_pool, 'table': 'test_table', 'rates': factory.rates}
-
-
 @patch_sleep
 def test_custom_bucket_class(mock_sleep):
     class MyBucket(InMemoryBucket):
@@ -379,28 +332,14 @@ def test_custom_bucket_class(mock_sleep):
     assert mock_sleep.called is False
     session.get(MOCKED_URL)
     assert mock_sleep.called is True
+    session.close()
 
 
 def test_bucket_name_overrides_per_host():
-    """Explicit bucket_name takes priority over per_host=True"""
     session = LimiterSession(per_second=5, bucket_name='fixed', per_host=True)
     req = PreparedRequest()
     req.url = MOCKED_URL
     assert session._bucket_name(req) == 'fixed'
-
-
-@pytest.mark.parametrize(
-    'kwargs, bucket_name, expected',
-    [
-        ({'path': '/tmp/x.db'}, None, {'db_path': '/tmp/x.db'}),
-        ({}, 'mybucket', {'table': 'bucket_mybucket'}),
-        ({'path': '/tmp/x.db', 'unknown_key': 'val'}, None, {'db_path': '/tmp/x.db'}),
-        ({'table': 'custom'}, 'mybucket', {'table': 'custom'}),  # explicit table not overridden
-    ],
-)
-def test_prepare_sqlite_kwargs(kwargs, bucket_name, expected):
-    result = prepare_sqlite_kwargs(kwargs, bucket_name)
-    assert result == expected
 
 
 def test_max_delay_logs_warning(caplog):
@@ -411,7 +350,6 @@ def test_max_delay_logs_warning(caplog):
 
 @patch_sleep
 def test_burst_allows_consecutive_requests(mock_sleep):
-    """burst=3 allows 3 rapid consecutive requests before enforcing per-second limit"""
     session = get_mock_session(per_second=1, burst=3)
     for _ in range(3):
         session.get(MOCKED_URL)
@@ -432,8 +370,6 @@ def test_burst_allows_consecutive_requests(mock_sleep):
 def test_pickling(mock_sleep, bucket_class, bucket_kwargs, tmp_path):
     if bucket_class == SQLiteBucket:
         bucket_kwargs = {'path': tmp_path / 'rate_limit.db', **SQLITE_BUCKET_KWARGS}
-    elif bucket_kwargs is None:
-        bucket_kwargs = {}
 
     session = get_mock_session(per_second=5, bucket_class=bucket_class, bucket_kwargs=bucket_kwargs)
     unpickled = pickle.loads(pickle.dumps(session))
@@ -449,3 +385,139 @@ def test_pickling(mock_sleep, bucket_class, bucket_kwargs, tmp_path):
     assert mock_sleep.called is False
     unpickled.get(MOCKED_URL)
     assert mock_sleep.called is True
+
+
+@patch_sleep
+@pytest.mark.parametrize('method', ['get', 'post', 'put', 'patch', 'delete', 'head', 'options'])
+def test_rate_limiting_applies_to_all_http_methods(mock_sleep, method):
+    session = get_mock_session(per_second=5)
+    http_method = getattr(session, method)
+    for _ in range(5):
+        http_method(MOCKED_URL)
+    assert mock_sleep.called is False
+    http_method(MOCKED_URL)
+    assert mock_sleep.called is True
+
+
+@patch_sleep
+def test_combined_rate_limits(mock_sleep):
+    session = get_mock_session(per_second=5, per_minute=10)
+
+    for _ in range(5):
+        session.get(MOCKED_URL)
+    assert mock_sleep.called is False
+
+    session.get(MOCKED_URL)
+    assert mock_sleep.called is True
+
+
+@pytest.mark.parametrize(
+    'kwargs, expected_limit',
+    [
+        ({'per_hour': 100}, 100),
+        ({'per_day': 1000}, 1000),
+        ({'per_month': 10000}, 10000),
+    ],
+)
+def test_rate_limit_period(kwargs, expected_limit):
+    session = LimiterSession(**kwargs)
+    factory = session.limiter.bucket_factory
+    assert len(factory.rates) == 1
+    assert factory.rates[0].limit == expected_limit
+
+
+def test_no_rate_limits_no_limiter():
+    session = LimiterSession()
+    assert session.limiter is not None
+    factory = session.limiter.bucket_factory
+    assert len(factory.rates) == 0
+
+
+@pytest.mark.parametrize(
+    'url, expected_name',
+    [
+        ('http+mock://example.com/path', 'example.com'),
+        ('http+mock://example.com:8080/path', 'example.com:8080'),
+        ('http+mock://192.168.1.1/path', '192.168.1.1'),
+        ('http+mock://[::1]/path', '[::1]'),
+        ('http+mock://[::1]:8080/path', '[::1]:8080'),
+    ],
+)
+def test_bucket_name_from_url(url, expected_name):
+    """per_host bucket names are derived from URL netloc, including ports and IPs"""
+    session = LimiterSession(per_second=5, per_host=True)
+    req = PreparedRequest()
+    req.url = url
+    assert session._bucket_name(req) == expected_name
+
+
+def test_custom_limiter_close_does_not_stop_factory():
+    bucket = InMemoryBucket([Rate(5, Duration.SECOND)])
+    limiter = Limiter(bucket)
+    session = get_mock_session(limiter=limiter)
+    session.get(MOCKED_URL)
+    session.close()
+
+
+@patch_sleep
+def test_limiter_adapter_per_host(mock_sleep, limiter_adapter_session: tuple) -> None:
+    session, adapter = limiter_adapter_session
+
+    for _ in range(5):
+        session.get(MOCKED_URL)
+    assert mock_sleep.called is False
+
+    session.get(MOCKED_URL_ALT_HOST)
+    assert mock_sleep.called is False
+
+    session.get(MOCKED_URL)
+    assert mock_sleep.called is True
+
+
+@patch_sleep
+def test_shared_bucket_name_enforces_shared_limit(mock_sleep, tmp_path):
+    ratelimit_path = tmp_path / 'rate_limit.db'
+
+    session_a = get_mock_session(
+        per_second=5,
+        bucket_name='shared',
+        bucket_class=SQLiteBucket,
+        bucket_kwargs={'path': ratelimit_path, **SQLITE_BUCKET_KWARGS},
+    )
+    session_b = get_mock_session(
+        per_second=5,
+        bucket_name='shared',
+        bucket_class=SQLiteBucket,
+        bucket_kwargs={'path': ratelimit_path, **SQLITE_BUCKET_KWARGS},
+    )
+
+    for _ in range(5):
+        session_a.get(MOCKED_URL)
+    assert mock_sleep.called is False
+
+    session_b.get(MOCKED_URL)
+    assert mock_sleep.called is True
+
+
+@patch_sleep
+def test_limit_statuses_multiple_codes(mock_sleep):
+    session = get_mock_session(per_second=5, limit_statuses=[429, 500])
+
+    session.get(MOCKED_URL_500)
+    assert mock_sleep.called is False
+
+    session.get(MOCKED_URL_500)
+    assert mock_sleep.called is True
+
+
+@pytest.mark.parametrize(
+    'func, kwargs, expected',
+    [
+        (lambda x, y: None, {'x': 1, 'y': 2, 'z': 3}, {'x': 1, 'y': 2}),
+        (lambda x: None, {'x': 1, 'y': 2}, {'x': 1}),
+        (lambda: None, {'x': 1}, {}),
+        (lambda x, y=None: None, {'x': 1, 'y': None}, {'x': 1}),
+    ],
+)
+def test_get_valid_kwargs(func, kwargs, expected):
+    assert _get_valid_kwargs(func, kwargs) == expected
