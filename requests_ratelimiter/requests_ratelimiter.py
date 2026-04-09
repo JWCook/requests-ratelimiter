@@ -66,6 +66,11 @@ class LimiterMixin(MIXIN_BASE):
         if limiter:
             self.limiter = limiter
             self._custom_limiter = True
+            if per_host and not isinstance(limiter.bucket_factory, HostBucketFactory):
+                logger.warning(
+                    'Custom limiter does not use HostBucketFactory; per-host rate limiting will '
+                    'not work. Use HostBucketFactory to enable per-host rate limiting.'
+                )
         else:
             factory = HostBucketFactory(
                 rates=rates,
