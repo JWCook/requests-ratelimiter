@@ -18,7 +18,7 @@ from pyrate_limiter import (
 from requests import PreparedRequest, Session
 from requests_cache import CacheMixin
 
-from requests_ratelimiter import LimiterMixin, LimiterSession
+from requests_ratelimiter import HostBucketFactory, LimiterMixin, LimiterSession
 from requests_ratelimiter.requests_ratelimiter import _convert_rate, _get_valid_kwargs
 from test.conftest import (
     MOCKED_URL,
@@ -48,7 +48,6 @@ class CustomSession(LimiterMixin, Session):
         lambda: LimiterSession(per_second=5),
         lambda: CustomSession(per_second=5, flag=True),
     ],
-    ids=['LimiterSession', 'CustomSession'],
 )
 def test_rate_limit_enforcement(mock_sleep, session_factory):
     session = mount_mock_adapter(session_factory())
@@ -90,6 +89,40 @@ def test_custom_limiter(mock_sleep):
 
     session.get(MOCKED_URL)
     assert mock_sleep.called is True
+
+
+@patch_sleep
+def test_custom_limiter__per_host(mock_sleep):
+    factory = HostBucketFactory(rates=[Rate(5, Duration.SECOND)])
+    limiter = Limiter(factory)
+    session = get_mock_session(limiter=limiter, per_host=True)
+
+    for _ in range(5):
+        session.get(MOCKED_URL)
+    assert mock_sleep.called is False
+
+    # A different host should not be affected
+    session.get(MOCKED_URL_ALT_HOST)
+    assert mock_sleep.called is False
+
+    session.get(MOCKED_URL)
+    assert mock_sleep.called is True
+
+
+@pytest.mark.parametrize(
+    'session_kwargs, expect_warning',
+    [
+        ({'per_host': True}, True),
+        ({'per_host': False}, False),
+    ],
+)
+def test_custom_limiter__per_host_warning(caplog, session_kwargs, expect_warning):
+    """Warn when a custom limiter without HostBucketFactory is used with per_host=True"""
+    bucket = InMemoryBucket([Rate(5, Duration.SECOND)])
+    limiter = Limiter(bucket)
+    with caplog.at_level('WARNING', logger='requests_ratelimiter'):
+        LimiterSession(limiter=limiter, **session_kwargs)
+    assert ('HostBucketFactory' in caplog.text) == expect_warning
 
 
 @patch_sleep
@@ -299,7 +332,7 @@ def test_close_before_any_request_and_idempotent():
 def test_fill_bucket_with_custom_limiter(mock_sleep):
     bucket = InMemoryBucket([Rate(5, Duration.SECOND)])
     limiter = Limiter(bucket)
-    session = get_mock_session(limiter=limiter)
+    session = get_mock_session(limiter=limiter, per_host=False)
     session.get(MOCKED_URL_429)
     session.get(MOCKED_URL_429)
     assert mock_sleep.called is True
@@ -335,11 +368,11 @@ def test_custom_bucket_class(mock_sleep):
     session.close()
 
 
-def test_bucket_name_overrides_per_host():
-    session = LimiterSession(per_second=5, bucket_name='fixed', per_host=True)
+def test_bucket_name_prefixes_per_host():
+    session = LimiterSession(per_second=5, bucket_name='myapp', per_host=True)
     req = PreparedRequest()
     req.url = MOCKED_URL
-    assert session._bucket_name(req) == 'fixed'
+    assert session._bucket_name(req) == 'myapp:requests-ratelimiter.com'
 
 
 def test_max_delay_logs_warning(caplog):
@@ -365,7 +398,6 @@ def test_burst_allows_consecutive_requests(mock_sleep):
         (InMemoryBucket, {}),  # InMemoryBucket
         (SQLiteBucket, None),  # SQLiteBucket (will use fixture to provide kwargs)
     ],
-    ids=['in_memory', 'sqlite'],
 )
 def test_pickling(mock_sleep, bucket_class, bucket_kwargs, tmp_path):
     if bucket_class == SQLiteBucket:
@@ -434,18 +466,19 @@ def test_no_rate_limits_no_limiter():
 
 
 @pytest.mark.parametrize(
-    'url, expected_name',
+    'url, bucket_name, expected_name',
     [
-        ('http+mock://example.com/path', 'example.com'),
-        ('http+mock://example.com:8080/path', 'example.com:8080'),
-        ('http+mock://192.168.1.1/path', '192.168.1.1'),
-        ('http+mock://[::1]/path', '[::1]'),
-        ('http+mock://[::1]:8080/path', '[::1]:8080'),
+        ('http+mock://example.com/path', None, 'example.com'),
+        ('http+mock://example.com:8080/path', None, 'example.com:8080'),
+        ('http+mock://192.168.1.1/path', None, '192.168.1.1'),
+        ('http+mock://[::1]/path', None, '[::1]'),
+        ('http+mock://[::1]:8080/path', None, '[::1]:8080'),
+        ('http+mock://example.com/path', 'myapp', 'myapp:example.com'),
     ],
 )
-def test_bucket_name_from_url(url, expected_name):
+def test_bucket_name_from_url(url, bucket_name, expected_name):
     """per_host bucket names are derived from URL netloc, including ports and IPs"""
-    session = LimiterSession(per_second=5, per_host=True)
+    session = LimiterSession(per_second=5, per_host=True, bucket_name=bucket_name)
     req = PreparedRequest()
     req.url = url
     assert session._bucket_name(req) == expected_name
@@ -454,7 +487,7 @@ def test_bucket_name_from_url(url, expected_name):
 def test_custom_limiter_close_does_not_stop_factory():
     bucket = InMemoryBucket([Rate(5, Duration.SECOND)])
     limiter = Limiter(bucket)
-    session = get_mock_session(limiter=limiter)
+    session = get_mock_session(limiter=limiter, per_host=False)
     session.get(MOCKED_URL)
     session.close()
 
