@@ -3,6 +3,7 @@
 ## 0.10.0 (Unreleased)
 * Fix per-host rate-limiting for Redis and Postgres backends
 * If both `per_host=True` and a `bucket_name` is specified, use `bucket_name` as a bucket prefix
+* Add warning if a custom Limiter object is passed with `per_host=True` and no HostBucketFactory
 
 ## 0.9.3 (2026-04-02)
 * Fix bucket initialization for `RedisBucket` and `PostgresBucket`

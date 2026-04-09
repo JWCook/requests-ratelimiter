@@ -123,16 +123,20 @@ The following parameters are available for the most common rate limit intervals:
 <!-- TODO: Section explaining burst rate limit -->
 
 ### Advanced Settings
-If you need to define more complex rate limits, you can create a `Limiter` object instead:
+If you need to define more complex rate limits, you can use `Limiter` directly.
+Note that it must be used with `HostBucketFactory` if you want per-host rate-limiting.
+
 ```python
-from pyrate_limiter import Duration, RequestRate, Limiter
-from requests_ratelimiter import LimiterSession
+from pyrate_limiter import Duration, Rate, Limiter
+from requests_ratelimiter import LimiterSession, HostBucketFactory
 
-nanocentury_rate = RequestRate(10, Duration.SECOND * 3.156)
-fortnight_rate = RequestRate(1000, Duration.DAY * 14)
-trimonthly_rate = RequestRate(10000, Duration.MONTH * 3)
-limiter = Limiter(nanocentury_rate, fortnight_rate, trimonthly_rate)
+nanocentury_rate = Rate(10, Duration.SECOND * 3.156)
+fortnight_rate = Rate(1000, Duration.DAY * 14)
+trimonthly_rate = Rate(10000, Duration.DAY * 90)
 
+# This factory object is required for per-host rate-limiting
+factory = HostBucketFactory(rates=[nanocentury_rate, fortnight_rate, trimonthly_rate])
+limiter = Limiter(factory)
 session = LimiterSession(limiter=limiter)
 ```
 

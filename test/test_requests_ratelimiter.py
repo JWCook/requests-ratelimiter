@@ -18,7 +18,7 @@ from pyrate_limiter import (
 from requests import PreparedRequest, Session
 from requests_cache import CacheMixin
 
-from requests_ratelimiter import LimiterMixin, LimiterSession
+from requests_ratelimiter import HostBucketFactory, LimiterMixin, LimiterSession
 from requests_ratelimiter.requests_ratelimiter import _convert_rate, _get_valid_kwargs
 from test.conftest import (
     MOCKED_URL,
@@ -81,7 +81,7 @@ def test_limiter_adapter(mock_sleep, limiter_adapter_session: tuple) -> None:
 def test_custom_limiter(mock_sleep):
     bucket = InMemoryBucket([Rate(5, Duration.SECOND)])
     limiter = Limiter(bucket)
-    session = get_mock_session(limiter=limiter, per_host=False)
+    session = get_mock_session(limiter=limiter)
 
     for _ in range(5):
         session.get(MOCKED_URL)
@@ -89,6 +89,40 @@ def test_custom_limiter(mock_sleep):
 
     session.get(MOCKED_URL)
     assert mock_sleep.called is True
+
+
+@patch_sleep
+def test_custom_limiter__per_host(mock_sleep):
+    factory = HostBucketFactory(rates=[Rate(5, Duration.SECOND)])
+    limiter = Limiter(factory)
+    session = get_mock_session(limiter=limiter, per_host=True)
+
+    for _ in range(5):
+        session.get(MOCKED_URL)
+    assert mock_sleep.called is False
+
+    # A different host should not be affected
+    session.get(MOCKED_URL_ALT_HOST)
+    assert mock_sleep.called is False
+
+    session.get(MOCKED_URL)
+    assert mock_sleep.called is True
+
+
+@pytest.mark.parametrize(
+    'session_kwargs, expect_warning',
+    [
+        ({'per_host': True}, True),
+        ({'per_host': False}, False),
+    ],
+)
+def test_custom_limiter__per_host_warning(caplog, session_kwargs, expect_warning):
+    """Warn when a custom limiter without HostBucketFactory is used with per_host=True"""
+    bucket = InMemoryBucket([Rate(5, Duration.SECOND)])
+    limiter = Limiter(bucket)
+    with caplog.at_level('WARNING', logger='requests_ratelimiter'):
+        LimiterSession(limiter=limiter, **session_kwargs)
+    assert ('HostBucketFactory' in caplog.text) == expect_warning
 
 
 @patch_sleep
