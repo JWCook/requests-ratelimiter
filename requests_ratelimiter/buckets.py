@@ -1,3 +1,4 @@
+import re
 from typing import Dict, Optional, Type
 
 from pyrate_limiter import InMemoryBucket, PostgresBucket, Rate, RedisBucket, SQLiteBucket
@@ -33,44 +34,41 @@ class HostBucketFactory(BucketFactory):
         """Get or create a bucket for the given item name"""
         if item.name not in self.buckets:
             # Create new bucket for this name
-            bucket = self._create_bucket()
+            bucket = self._create_bucket(item.name)
             self.schedule_leak(bucket)
             self.buckets[item.name] = bucket
 
         return self.buckets[item.name]
 
-    def _create_bucket(self) -> AbstractBucket:
-        """Create a new bucket instance with the configured bucket class"""
+    def _create_bucket(self, name: str) -> AbstractBucket:
+        """Create a new bucket instance, and handle per-host naming for each supported backend"""
         if self.bucket_class == InMemoryBucket:
             return InMemoryBucket(self.rates)
         elif self.bucket_class == SQLiteBucket:
-            kwargs = prepare_sqlite_kwargs(self.bucket_init_kwargs, self.bucket_name)
+            kwargs = prepare_sqlite_kwargs(self.bucket_init_kwargs, name)
             return SQLiteBucket.init_from_file(rates=self.rates, **kwargs)
         elif self.bucket_class == RedisBucket:
             kwargs = self.bucket_init_kwargs.copy()
-            bucket_key = kwargs.pop('bucket_key', self.bucket_name or 'default')
             redis = kwargs.pop('redis')
-            return RedisBucket.init(rates=self.rates, redis=redis, bucket_key=bucket_key)
+            bucket_key = kwargs.pop('bucket_key', _sanitize_name(name))
+            return RedisBucket.init(rates=self.rates, redis=redis, bucket_key=bucket_key, **kwargs)
         elif self.bucket_class == PostgresBucket:
             kwargs = self.bucket_init_kwargs.copy()
             pool = kwargs.pop('pool')
-            table = kwargs.pop('table', self.bucket_name or 'default')
+            table = kwargs.pop('table', _sanitize_name(name))
             return PostgresBucket(pool=pool, table=table, rates=self.rates)
         else:
-            # Generic bucket creation - pass rates as first arg
             return self.bucket_class(self.rates, **self.bucket_init_kwargs)
 
     def __getitem__(self, name: str) -> AbstractBucket:
         """Dict-like access for backward compatibility with _fill_bucket() method"""
         if name not in self.buckets:
-            # Create bucket on access
             temp_item = RateItem(name, 0, 1)
             return self.get(temp_item)
         return self.buckets[name]
 
 
 def prepare_sqlite_kwargs(bucket_kwargs: Dict, bucket_name: Optional[str] = None) -> Dict:
-    """Prepare SQLiteBucket kwargs for v4 compatibility"""
     kwargs = bucket_kwargs.copy()
     if 'path' in kwargs:
         kwargs['db_path'] = str(kwargs.pop('path'))
@@ -78,8 +76,12 @@ def prepare_sqlite_kwargs(bucket_kwargs: Dict, bucket_name: Optional[str] = None
     # If bucket_name is specified, use it as the table name to ensure separation
     # This allows multiple sessions with different bucket_names to share a db file
     if bucket_name and 'table' not in kwargs:
-        kwargs['table'] = f'bucket_{bucket_name}'
+        kwargs['table'] = f'bucket_{_sanitize_name(bucket_name)}'
 
     # Filter to only supported parameters for SQLiteBucket.init_from_file
     supported_params = {'table', 'db_path', 'create_new_table', 'use_file_lock'}
     return {k: v for k, v in kwargs.items() if k in supported_params}
+
+
+def _sanitize_name(name: str) -> str:
+    return re.sub(r'[^a-zA-Z0-9_]', '_', name)

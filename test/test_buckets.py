@@ -52,14 +52,14 @@ def test_separate_buckets_per_name():
 
 
 @pytest.mark.parametrize(
-    'extra_init_kwargs, expected_key',
+    'extra_init_kwargs, identity, expected_key',
     [
-        ({'bucket_key': 'test_bucket'}, 'test_bucket'),
-        ({}, 'default'),
+        ({}, 'api.example.com', 'api_example_com'),
+        ({'bucket_key': 'override'}, 'api.example.com', 'override'),
+        ({}, 'myapp:api.example.com', 'myapp_api_example_com'),
     ],
-    ids=['explicit_key', 'default_key'],
 )
-def test_redis_bucket(extra_init_kwargs, expected_key):
+def test_redis_bucket(extra_init_kwargs, identity, expected_key):
     mock_redis = MagicMock()
     mock_redis.script_load.return_value = 'fake_sha1'
     factory = HostBucketFactory(
@@ -69,7 +69,7 @@ def test_redis_bucket(extra_init_kwargs, expected_key):
     )
 
     with patch.object(RedisBucket, 'init', wraps=RedisBucket.init) as mock_init:
-        factory._create_bucket()
+        factory._create_bucket(identity)
 
     mock_init.assert_called_once_with(
         rates=factory.rates, redis=mock_redis, bucket_key=expected_key
@@ -82,20 +82,19 @@ def _postgres_init_stub(self, pool, table, rates):
 
 
 @pytest.mark.parametrize(
-    'extra_init_kwargs, factory_kwargs, expected_table',
+    'extra_init_kwargs, identity, expected_table',
     [
-        ({'table': 'test_table'}, {}, 'test_table'),
-        ({}, {'bucket_name': 'my_table'}, 'my_table'),
+        ({}, 'api.example.com', 'api_example_com'),
+        ({'table': 'override'}, 'api.example.com', 'override'),
+        ({}, 'myapp:api.example.com', 'myapp_api_example_com'),
     ],
-    ids=['explicit_table', 'default_from_bucket_name'],
 )
-def test_postgres_bucket(extra_init_kwargs, factory_kwargs, expected_table):
+def test_postgres_bucket(extra_init_kwargs, identity, expected_table):
     mock_pool = MagicMock()
     factory = HostBucketFactory(
         rates=[Rate(5, 1000)],
         bucket_class=PostgresBucket,
         bucket_init_kwargs={'pool': mock_pool, **extra_init_kwargs},
-        **factory_kwargs,
     )
 
     with patch.object(
@@ -105,7 +104,7 @@ def test_postgres_bucket(extra_init_kwargs, factory_kwargs, expected_table):
         return_value=None,
         side_effect=_postgres_init_stub,
     ) as mock_init:
-        factory._create_bucket()
+        factory._create_bucket(identity)
 
     _, kwargs = mock_init.call_args
     assert kwargs == {'pool': mock_pool, 'table': expected_table, 'rates': factory.rates}
@@ -119,7 +118,7 @@ def test_generic_bucket_creation():
         rates=[Rate(5, 1000)],
         bucket_class=CustomBucket,
     )
-    bucket = factory._create_bucket()
+    bucket = factory._create_bucket('test_host')
     assert isinstance(bucket, CustomBucket)
 
 

@@ -101,10 +101,11 @@ class LimiterMixin(MIXIN_BASE):
 
     def _bucket_name(self, request):
         """Get a bucket name for the given request"""
-        if self.bucket_name:
+        if self.per_host:
+            host = urlparse(request.url).netloc
+            return f'{self.bucket_name}:{host}' if self.bucket_name else host
+        elif self.bucket_name:
             return self.bucket_name
-        elif self.per_host:
-            return urlparse(request.url).netloc
         else:
             return self._default_bucket
 
@@ -188,8 +189,9 @@ class LimiterSession(LimiterMixin, Session):
             :py:class:`~pyrate_limiter.buckets.redis_bucket.RedisBucket`
         bucket_kwargs: Bucket backend keyword arguments
         limiter: An existing Limiter object to use instead of the above params
-        per_host: Track request rate limits separately for each host
         limit_statuses: Alternative HTTP status codes that indicate a rate limit was exceeded
+        per_host: Track request rate limits separately for each host
+        bucket_name: Override default bucket name. In per-host mode, this sets the bucket prefix.
     """
 
     __attrs__ = Session.__attrs__ + [
