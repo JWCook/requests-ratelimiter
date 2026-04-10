@@ -1,4 +1,8 @@
+import threading
+import time
+from collections import deque
 from collections.abc import Generator
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from logging import basicConfig, getLogger
 from unittest.mock import patch
 
@@ -62,6 +66,64 @@ def get_mock_adapter() -> Adapter:
     adapter.register_uri(ANY_METHOD, MOCKED_URL_429, status_code=429)
     adapter.register_uri(ANY_METHOD, MOCKED_URL_500, status_code=500)
     return adapter
+
+
+class _RateLimitServer(HTTPServer):
+    """HTTPServer that enforces a 1 req/sec sliding-window rate limit."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._lock = threading.Lock()
+        self._timestamps: deque[float] = deque()
+
+
+class _RateLimitHandler(BaseHTTPRequestHandler):
+    server: _RateLimitServer
+
+    def log_message(self, format: str, *args) -> None: ...
+
+    def do_GET(self) -> None:
+        now = time.monotonic()
+        with self.server._lock:
+            # Drop timestamps outside the 1-second sliding window
+            while self.server._timestamps and now - self.server._timestamps[0] > 1.0:
+                self.server._timestamps.popleft()
+
+            if self.server._timestamps:
+                self.send_response(429)
+                self.end_headers()
+                return
+
+            self.server._timestamps.append(now)
+
+        self.send_response(200)
+        self.end_headers()
+
+
+def _start_rate_limit_server() -> tuple[_RateLimitServer, str]:
+    """Start a local HTTP server that enforces 1 req/sec; return (server, base_url)."""
+    server = _RateLimitServer(('127.0.0.1', 0), _RateLimitHandler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    host = str(server.server_address[0])
+    port = server.server_address[1]
+    return server, f'http://{host}:{port}/'
+
+
+@pytest.fixture
+def rate_limit_server():
+    """Start a local HTTP server that enforces 1 req/sec and yield the base URL."""
+    server, url = _start_rate_limit_server()
+    yield url
+    server.shutdown()
+
+
+@pytest.fixture
+def rate_limit_servers():
+    """Start two independent rate-limiting servers and yield their base URLs."""
+    servers = [_start_rate_limit_server() for _ in range(2)]
+    yield [url for _, url in servers]
+    for server, _ in servers:
+        server.shutdown()
 
 
 @pytest.fixture

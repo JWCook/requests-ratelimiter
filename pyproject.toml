@@ -37,6 +37,7 @@ dev = [
     'pytest         >=8.3',
     'pytest-cov     >=4.0',
     'pytest-xdist   >=3.1',
+    'redis          >=4.0',
     'requests-mock  >=1.11',
     'requests-cache >=1.2',
 ]
@@ -75,6 +76,7 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 markers = [
     'integration: marks tests that run against a local HTTP server (deselect with -m "not integration")',
+    'redis: marks tests that require a running Redis server at localhost:6379 (deselect with -m "not redis")',
 ]
 
 [tool.ruff]
