@@ -1,0 +1,16 @@
+services:
+  httpbin:
+    image: mccutchen/go-httpbin
+    container_name: httpbin
+    ports:
+      - '8080:8080'
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6379:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 1s
+      timeout: 3s
+      retries: 10
