@@ -15,7 +15,7 @@ from pyrate_limiter import (
     Rate,
     SQLiteBucket,
 )
-from requests import PreparedRequest, Session
+from requests import PreparedRequest, Session, exceptions
 from requests_cache import CacheMixin
 
 from requests_ratelimiter import HostBucketFactory, LimiterMixin, LimiterSession
@@ -380,7 +380,7 @@ def test_max_delay_raises_on_timeout(mock_sleep):
     session = get_mock_session(per_second=5, max_delay=0.001)
     for _ in range(5):
         session.get(MOCKED_URL)
-    with pytest.raises(Exception, match='max_delay'):
+    with pytest.raises(exceptions.Timeout, match='max_delay'):
         session.get(MOCKED_URL)
 
 
@@ -420,6 +420,17 @@ def test_pickling(mock_sleep, bucket_class, bucket_kwargs, tmp_path):
     assert mock_sleep.called is False
     unpickled.get(MOCKED_URL)
     assert mock_sleep.called is True
+
+
+def test_pickling_custom_limiter():
+    """Unpickling a session with a custom limiter should preserve _custom_limiter so that
+    close() does not try to stop a factory it doesn't own."""
+    bucket = InMemoryBucket([Rate(5, Duration.SECOND)])
+    limiter = Limiter(bucket)
+    session = get_mock_session(limiter=limiter, per_host=False)
+    unpickled = pickle.loads(pickle.dumps(session))
+    assert unpickled._custom_limiter is True
+    unpickled.close()  # must not raise
 
 
 @patch_sleep

@@ -212,6 +212,7 @@ class LimiterSession(LimiterMixin, Session):
         'per_host',
         'bucket_name',
         '_default_bucket',
+        '_custom_limiter',
     ]
 
 
