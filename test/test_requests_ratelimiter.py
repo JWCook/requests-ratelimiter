@@ -375,10 +375,13 @@ def test_bucket_name_prefixes_per_host():
     assert session._bucket_name(req) == 'myapp:requests-ratelimiter.com'
 
 
-def test_max_delay_logs_warning(caplog):
-    with caplog.at_level('WARNING', logger='requests_ratelimiter'):
-        LimiterSession(per_second=5, max_delay=10)
-    assert 'max_delay' in caplog.text
+@patch_sleep
+def test_max_delay_raises_on_timeout(mock_sleep):
+    session = get_mock_session(per_second=5, max_delay=0.001)
+    for _ in range(5):
+        session.get(MOCKED_URL)
+    with pytest.raises(Exception, match='max_delay'):
+        session.get(MOCKED_URL)
 
 
 @patch_sleep

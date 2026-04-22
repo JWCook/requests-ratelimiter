@@ -7,7 +7,7 @@ from uuid import uuid4
 
 from pyrate_limiter import Duration, InMemoryBucket, Limiter, Rate
 from pyrate_limiter.abstracts import AbstractBucket, RateItem
-from requests import PreparedRequest, Response, Session
+from requests import PreparedRequest, Response, Session, exceptions
 from requests.adapters import HTTPAdapter
 
 from .buckets import HostBucketFactory
@@ -38,6 +38,7 @@ class LimiterMixin(MIXIN_BASE):
         time_function: Optional[Callable[..., float]] = None,
         limiter: Optional[Limiter] = None,
         per_host: bool = True,
+        max_delay: Optional[float] = None,
         limit_statuses: Iterable[int] = (429,),
         bucket_name: Optional[str] = None,
         **kwargs,
@@ -81,8 +82,7 @@ class LimiterMixin(MIXIN_BASE):
             self.limiter = Limiter(factory, buffer_ms=50)
             self._custom_limiter = False
 
-        if kwargs.pop('max_delay', None):
-            logger.warning('max_delay is no longer supported')
+        self.max_delay = max_delay
         self.limit_statuses = limit_statuses
         self.per_host = per_host
         self.bucket_name = bucket_name
@@ -96,7 +96,10 @@ class LimiterMixin(MIXIN_BASE):
     def send(self, request: PreparedRequest, **kwargs) -> Response:
         """Send a request with rate-limiting."""
         bucket_name = self._bucket_name(request)
-        self.limiter.try_acquire(bucket_name, weight=1, blocking=True)
+        timeout = self.max_delay if self.max_delay is not None else -1
+        acquired = self.limiter.try_acquire(bucket_name, weight=1, blocking=True, timeout=timeout)
+        if not acquired:
+            raise exceptions.Timeout(f'Rate limit not cleared within max_delay={self.max_delay}s')
 
         response = super().send(request, **kwargs)
         if response.status_code in self.limit_statuses:
@@ -196,12 +199,16 @@ class LimiterSession(LimiterMixin, Session):
         limiter: An existing Limiter object to use instead of the above params
         limit_statuses: Alternative HTTP status codes that indicate a rate limit was exceeded
         per_host: Track request rate limits separately for each host
+        max_delay: Maximum time (in seconds) to wait for a rate-limited request. If the rate limit
+            is not cleared within this time, raises :py:exc:`requests.exceptions.Timeout`.
+            Default: ``None`` (wait indefinitely).
         bucket_name: Override default bucket name. In per-host mode, this sets the bucket prefix.
     """
 
     __attrs__ = Session.__attrs__ + [
         'limiter',
         'limit_statuses',
+        'max_delay',
         'per_host',
         'bucket_name',
         '_default_bucket',
