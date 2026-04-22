@@ -201,7 +201,7 @@ class LimiterSession(LimiterMixin, Session):
         per_host: Track request rate limits separately for each host
         max_delay: Maximum time (in seconds) to wait for a rate-limited request. If the rate limit
             is not cleared within this time, raises :py:exc:`requests.exceptions.Timeout`.
-            Default: ``None`` (wait indefinitely).
+            ``None`` = wait indefinitely.
         bucket_name: Override default bucket name. In per-host mode, this sets the bucket prefix.
     """
 

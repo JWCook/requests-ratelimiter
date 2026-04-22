@@ -1,6 +1,6 @@
 # History
 
-## 0.10.0 (Unreleased)
+## 0.10.0 (2026-04-22)
 * Add `max_delay` parameter compatible with pyrate-limiter v4 (previously removed in 0.9)
 * Fix per-host rate-limiting for Redis and Postgres backends
 * If both `per_host=True` and a `bucket_name` is specified, use `bucket_name` as a bucket prefix
