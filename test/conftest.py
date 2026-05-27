@@ -78,3 +78,10 @@ def limiter_adapter_session() -> Generator[tuple[Session, LimiterAdapter], None,
         adapter = LimiterAdapter(per_second=5)
         session.mount('http+mock://', adapter)
         yield session, adapter
+
+
+@pytest.fixture(autouse=True)
+def no_proxy_env(monkeypatch):
+    """Ensure proxy env vars are unset for all tests."""
+    for var in ('HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy'):
+        monkeypatch.delenv(var, raising=False)
