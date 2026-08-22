@@ -248,5 +248,5 @@ def _convert_rate(limit: float, interval: float) -> Rate:
 
 def _get_valid_kwargs(func: Callable, kwargs: Dict) -> Dict:
     """Get the subset of non-None ``kwargs`` that are valid params for ``func``"""
-    sig_params = list(signature(func).parameters)
+    sig_params = signature(func).parameters
     return {k: v for k, v in kwargs.items() if k in sig_params and v is not None}
