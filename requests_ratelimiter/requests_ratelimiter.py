@@ -7,6 +7,7 @@ from uuid import uuid4
 
 from pyrate_limiter import Duration, InMemoryBucket, Limiter, Rate
 from pyrate_limiter.abstracts import AbstractBucket, RateItem
+from pyrate_limiter.limiter import combined_lock
 from requests import PreparedRequest, Response, Session, exceptions
 from requests.adapters import HTTPAdapter
 
@@ -146,16 +147,17 @@ class LimiterMixin(MIXIN_BASE):
             logger.warning('No buckets available to fill')
             return
 
-        now = bucket.now()
-
         # Use smallest rate interval (first after sorting)
         rate = sorted(bucket.rates, key=lambda r: r.interval)[0]
 
         # Add filler items to saturate the smallest rate limit
         # This ensures we delay before the next request
-        for _ in range(rate.limit):
-            filler_item = RateItem(bucket_name, now, weight=1)
-            bucket.put(filler_item)
+        # Each put() resets bucket.failing_rate, which try_acquire() reads under this lock
+        with combined_lock(self.limiter.lock, blocking=True):
+            now = bucket.now()
+            for _ in range(rate.limit):
+                filler_item = RateItem(bucket_name, now, weight=1)
+                bucket.put(filler_item)
 
     def close(self) -> None:
         """Close the session or adapter and release all rate-limiter resources.

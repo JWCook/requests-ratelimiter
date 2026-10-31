@@ -4,6 +4,7 @@ additional behavior specific to requests-ratelimiter.
 """
 
 import pickle
+from threading import Thread
 from time import sleep
 from unittest.mock import MagicMock, patch
 
@@ -352,6 +353,25 @@ def test_fill_bucket_no_bucket_logs_warning(caplog):
     with caplog.at_level('WARNING', logger='requests_ratelimiter'):
         session._fill_bucket(req)
     assert 'No buckets available' in caplog.text
+
+
+def test_fill_bucket_waits_for_limiter_lock():
+    """A filler put() resets bucket.failing_rate, so it must not run while another thread holds
+    the limiter lock between its own put() and waiting()
+    """
+    session = get_mock_session(per_second=5)
+    req = PreparedRequest()
+    req.url = MOCKED_URL
+    bucket = session.limiter.bucket_factory[session._bucket_name(req)]
+
+    filler = Thread(target=session._fill_bucket, args=(req,))
+    with session.limiter.lock:
+        filler.start()
+        filler.join(timeout=0.1)
+        assert bucket.count() == 0
+
+    filler.join()
+    assert bucket.count() == 5
 
 
 @patch_sleep
